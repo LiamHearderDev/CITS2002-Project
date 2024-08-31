@@ -5,8 +5,9 @@
 #include <time.h>
 
 typedef struct {
-	char* array[64];
 	int length;
+	int scope; // currently unused. Tbh, this is just to avoid byte padding warnings lol
+	char* array[32];
 } string_array;
 
 // Defining the structure that will be used for memory of doubles
@@ -15,7 +16,7 @@ typedef struct {
 	double value;
 } memory_line;
 
-memory_line* memory[64];
+memory_line* memory_cache[64];
 
 /* I honestly don't remember what these are for
 int memory_size = 0;
