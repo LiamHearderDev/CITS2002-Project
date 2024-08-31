@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/types.h> 
 #include <time.h>
+#include <ctype.h>
 
 typedef struct {
 	int length;
@@ -23,10 +24,15 @@ int memory_size = 0;
 int memory_count = 0;
 */
 
+
+// main functions
+int process_keywords(string_array keywords);
 int extract_keywords(char* line, string_array *token_stream);
 
-int process_keywords(string_array keywords);
+// processing functions
+void ml_assign_variable(char* name, double value);
+void ml_print(string_array keywords);
+char* calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos);
 
-void assign_variable(char* name, double value);
-
+// debugging functions
 void print_strings(string_array* strings);
