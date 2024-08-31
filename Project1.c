@@ -2,6 +2,8 @@
 
 
 
+#pragma warning(disable :5045) // NEED to remove this long before final draft. This disables a warning that linux might not have.
+
 int main(int argc, char *argv[])
 {
 	// these two lines are just to get rid of a warning.
@@ -26,21 +28,22 @@ int main(int argc, char *argv[])
 		// gets rid of the newline character
 		buffer[strcspn(buffer, "\n")] = 0;
 
-		//char* arr[64];
 		string_array keywords;
 		extract_keywords(buffer, &keywords);
 
+		// runs the ML code.
 		process_keywords(keywords);
-		//print_strings(&keywords);
 	}
-
 	return 1;
 }
 
-// This function will extract the keywords from a line.
-// Takes two inputs: a line (char*), and a token_stream (char*[]).
-// Param "line" is for the input text from which keywords are extracted.
-// Param "token_stream" is a char ptr array and is where the keywords output is written to.
+/*
+This function will extract the keywords from a line.
+Takes two inputs: a line (char*), and a token_stream (char*[]).
+
+@line = For the input text from which keywords are extracted.
+@token_stream = A char ptr array and is where the keywords output is written to.
+*/
 int extract_keywords(char *line, string_array *token_stream)
 {
 	// Make a new line for temporary storage as "strtok" will modify the input stream.
@@ -81,28 +84,56 @@ int extract_keywords(char *line, string_array *token_stream)
 	return 1;
 }
 
+/*
+This is where the actual logic happens and what runs the ml code.
+This takes an input string_array and decides what to do with it.
+If it can't figure out what to do, it prints an error.
+
+@keywords = A string_array which lists every keyword in the line as well as the number of keywords.
+*/
 int process_keywords(string_array keywords)
 {
 	const int keyword_count = keywords.length;
 	for (int i = 0; i < keywords.length; i++)
 	{
-		//printf("KEYWORD: %s\n", keywords[i]);
-		if (strcmp(keywords.array[i], "#") == 0) { printf("COMMENT\n"); return 0; }
+		// COMMENTS
+		if (strcmp(keywords.array[i], "#") == 0) 
+		{
+			return 1;
+		}
 
+		// VARIABLE ASSIGNMENTS
 		if (strcmp(keywords.array[i], "<-") == 0)
 		{
 			if (keyword_count - 1 < 0 || keyword_count + 1 > 63 || i == 0)
 			{
-				printf("VARIABLE ASSIGNMENT INVALID: ACCESS VIOLATION."); return 0;
+				printf("VARIABLE ASSIGNMENT ERROR: ACCESS VIOLATION.\n");
+				return 0;
 			}
-			assign_variable(keywords.array[i - 1], 0);
-			//assign_variable(keywords.array[i - 1], strtod(keywords.array[i + 1], &keywords.array[keyword_count-1]));
+			
+			ml_assign_variable(keywords.array[i - 1], strtod(keywords.array[i + 1], &keywords.array[keyword_count-1]));
+			return 1;
+		}
+
+		
+
+		// PRINTING
+		if(strcmp(keywords.array[i], "print") == 0)
+		{
+			if (keyword_count + 1 > 63 || i == keywords.length)
+			{
+				printf("PRINT FUNCTION ERROR: INVALID PRINT PARAMS.\n");
+				return 0;
+			}
+			ml_print(keywords);
+			return 1;
 		}
 	}
-	return 1;
+	printf("SYNTAX ERROR: INVALID STATEMENTS.");
+	return 0;
 }
 
-void assign_variable(char* name, const double value)
+void ml_assign_variable(char* name, const double value)
 {
 	for (int i = 0; i < 64; i++)
 	{
@@ -113,13 +144,59 @@ void assign_variable(char* name, const double value)
 			return;
 		}
 	}
+	printf("VARIABLE ASSIGNMENT INVALID: OUT OF MEMORY\n");
 }
 
-// This is just for debugging. An easy to call function that prints an array of strings.
+void ml_print(string_array keywords)
+{
+	// Check if the first keyword is "print". If it isn't, then the syntax is invalid.
+	if (strcmp(keywords.array[0], "print") != 0)
+	{
+		printf("PRINT FUNCTION ERROR : INVALID PRINT PARAMS.\n");
+		return;
+	}
+
+	char* to_print[256];
+
+	// Check if we need to do an expression for some reason.
+	if (keywords.length > 2)
+	{
+		
+	}
+}
+
+// This is just for debugging. An easy-to-call function that prints an array of strings.
 void print_strings(string_array *strings)
 {
 	for (int i = 0; i < strings->length; i++)
 	{
 		printf("Print Each %i: %s\n", i, strings->array[i]);
 	}
+}
+
+char* calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos)
+{
+	for (int i = expr_start_pos; i < expr_end_pos; i++)
+	{
+		if (strlen(keywords.array[i]) == 1 && !isalpha(keywords.array[i][0]))
+		{
+			switch (keywords.array[i][0])
+			{
+			case '+':
+				break;
+
+			case '-':
+				break;
+
+			case '*':
+				break;
+
+			case '/':
+				break;
+
+			default: break;
+			}
+		}
+	}
+	
 }
