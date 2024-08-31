@@ -4,6 +4,9 @@
 
 int main(int argc, char *argv[])
 {
+	// these two lines are just to get rid of a warning.
+	if (argc < 2) { return 0; }
+	if (argv[1] == NULL) { return 0; }
 
 	// Opens the file and provides an error if it can't find it
 	FILE *sample = fopen("sample02.ml", "r");
@@ -84,31 +87,39 @@ int process_keywords(string_array keywords)
 	for (int i = 0; i < keywords.length; i++)
 	{
 		//printf("KEYWORD: %s\n", keywords[i]);
-		if (strcmp(keywords.array[i], "#") == 0) { printf("COMMENT\n"); return; }
+		if (strcmp(keywords.array[i], "#") == 0) { printf("COMMENT\n"); return 0; }
 
 		if (strcmp(keywords.array[i], "<-") == 0)
 		{
-			assign_variable(keywords.array[i - 1], strtod(keywords.array[i + 1], &keywords.array[keyword_count-1]));
+			if (keyword_count - 1 < 0 || keyword_count + 1 > 63 || i == 0)
+			{
+				printf("VARIABLE ASSIGNMENT INVALID: ACCESS VIOLATION."); return 0;
+			}
+			assign_variable(keywords.array[i - 1], 0);
+			//assign_variable(keywords.array[i - 1], strtod(keywords.array[i + 1], &keywords.array[keyword_count-1]));
 		}
 	}
 	return 1;
 }
 
-void assign_variable(char* name, double value)
+void assign_variable(char* name, const double value)
 {
 	for (int i = 0; i < 64; i++)
 	{
-		
+		if (strcmp(memory_cache[i]->name, "") == 0)
+		{
+			memory_cache[i]->name = name;
+			memory_cache[i]->value = value;
+			return;
+		}
 	}
 }
 
 // This is just for debugging. An easy to call function that prints an array of strings.
 void print_strings(string_array *strings)
 {
-	
-	for (int i = 0; i<strings->length; i++)
+	for (int i = 0; i < strings->length; i++)
 	{
 		printf("Print Each %i: %s\n", i, strings->array[i]);
 	}
-	
 }
