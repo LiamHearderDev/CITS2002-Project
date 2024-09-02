@@ -219,15 +219,6 @@ void ml_print(string_array keywords)
 	
 }
 
-// This is just for debugging. An easy-to-call function that prints an array of strings.
-void print_strings(string_array *strings)
-{
-	for (int i = 0; i < strings->length; i++)
-	{
-		printf("Print Each %i: %s\n", i, strings->array[i]);
-	}
-}
-
 void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream)
 {
 	// Plan for math expressions:
@@ -262,177 +253,78 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 		for (int i = expr_start_pos; i < expr_end_pos; i++)
 		{
 			// Make sure its a math symbol
-			if(strlen(keywords.array[i]) == 1 && !isdigit(keywords.array[i][0]) && !isalpha(keywords.array[i][0]))
+			if(strlen(keywords.array[i]) != 1 || isdigit(keywords.array[i][0]) || isalpha(keywords.array[i][0])) {continue;}
+
+			// Get the math term we are using
+			const char term = keywords.array[i][0];
+
+			// if the term isn't one of these, then don't do the following expressions
+			if (term != '*' && term != '/' && term != '+' && term != '-') { continue; }
+
+			// REWRITE
+
+			// Exit early if the syntax is invalid
+			if (i < 2 || i == keywords.length - 1)
 			{
-				switch (keywords.array[i][0])
+				fprintf(stderr, "Invalid math expression syntax!\n");
+				exit(EXIT_FAILURE);
+			}
+
+			// Convert from strings to doubles, multiply the numbers together and get the result.
+			double param1 = 0;
+			double param2 = 0;
+			sscanf(keywords.array[i - 1], "%lf", &param1);
+			sscanf(keywords.array[i + 1], "%lf", &param2);
+
+			double expr_result = 0;
+
+			switch(term)
+			{
+			case '*':
+				expr_result = param1 * param2;
+				break;
+			case '/':
+				if(param1 == 0.0 || param2 == 0.0)
 				{
-
-				// MULTIPLICATION
-				case '*':
-
-					// Exit early if the syntax is invalid
-					if(i < 2 || i == keywords.length-1)
-					{
-						fprintf(stderr, "Invalid multiplication syntax!\n");
-						exit(EXIT_FAILURE);
-					}
-
-					// Convert from strings to doubles, multiply the numbers together and get the result.
-					double mult_param1 = 0;
-					double mult_param2 = 0;
-					sscanf(keywords.array[i - 1], "%lf", &mult_param1);
-					sscanf(keywords.array[i + 1], "%lf", &mult_param2);
-					const double mult_expr_result = mult_param1 * mult_param2;
-
-					// Get the first number in the expression and allocate memory for the new value replacing it
-					keywords.array[i - 1] = malloc(sizeof(mult_expr_result)+1);
-					sprintf(keywords.array[i - 1], "%lf", mult_expr_result);
-
-					for (int j = i; j < expr_end_pos; j++)
-					{
-						if(j+2 >= keywords.length)
-						{
-							keywords.array[j] = NULL;
-							free(keywords.array[j]);
-							continue;
-						}
-						keywords.array[j] = malloc(sizeof(keywords.array[j + 2] + 1));
-						strcpy(keywords.array[j], keywords.array[j + 2]);
-					}
-
-					// Now that the keywords array is 2 keywords shorter, we need to decrement the expression's end-position by 2.
-					expr_end_pos = expr_end_pos - 2;
-					keywords.length = keywords.length - 2;
-					break;
-
-				// DIVISION
-				case '/':
-
-					// Exit early if the syntax is invalid
-					if (i < 2 || i == keywords.length - 1)
-					{
-						fprintf(stderr, "Invalid division syntax!\n");
-						exit(EXIT_FAILURE);
-					}
-
-					// Convert from strings to doubles, divide param1 by param2 and get the result.
-					double div_param1 = 0;
-					double div_param2 = 0;
-					sscanf(keywords.array[i - 1], "%lf", &div_param1);
-					sscanf(keywords.array[i + 1], "%lf", &div_param2);
-
-					// Ensure it doesn't divide by zero.
-					if(div_param1 == 0 || div_param2 == 0)
-					{
-						fprintf(stderr, "Divide by zero error.\n");
-						exit(EXIT_FAILURE);
-					}
-
-					const double div_expr_result = div_param1 / div_param2;
-
-					// Get the first number in the expression and allocate memory for the new value replacing it
-					keywords.array[i - 1] = malloc(sizeof(div_expr_result) + 1);
-					sprintf(keywords.array[i - 1], "%lf", div_expr_result);
-
-					for (int j = i; j < expr_end_pos; j++)
-					{
-						if (j + 2 >= keywords.length)
-						{
-							keywords.array[j] = NULL;
-							free(keywords.array[j]);
-							continue;
-						}
-						keywords.array[j] = malloc(sizeof(keywords.array[j + 2] + 1));
-						strcpy(keywords.array[j], keywords.array[j + 2]);
-					}
-
-					// Now that the keywords array is 2 keywords shorter, we need to decrement the expression's end-position by 2.
-					expr_end_pos = expr_end_pos - 2;
-					keywords.length = keywords.length - 2;
-					break;
-
-				// ADDITION
-				case '+':
-					// Exit early if the syntax is invalid
-					if (i < 2 || i == keywords.length - 1)
-					{
-						fprintf(stderr, "Invalid addition syntax!\n");
-						exit(EXIT_FAILURE);
-					}
-
-					// Convert from strings to doubles, divide param1 by param2 and get the result.
-					double add_param1 = 0;
-					double add_param2 = 0;
-					sscanf(keywords.array[i - 1], "%lf", &add_param1);
-					sscanf(keywords.array[i + 1], "%lf", &add_param2);
-					const double add_expr_result = add_param1 + add_param2;
-
-					// Get the first number in the expression and allocate memory for the new value replacing it
-					keywords.array[i - 1] = malloc(sizeof(add_expr_result) + 1);
-					sprintf(keywords.array[i - 1], "%lf", add_expr_result);
-
-					for (int j = i; j < expr_end_pos; j++)
-					{
-						if (j + 2 >= keywords.length)
-						{
-							keywords.array[j] = NULL;
-							free(keywords.array[j]);
-							continue;
-						}
-						keywords.array[j] = malloc(sizeof(keywords.array[j + 2] + 1));
-						strcpy(keywords.array[j], keywords.array[j + 2]);
-					}
-
-					// Now that the keywords array is 2 keywords shorter, we need to decrement the expression's end-position by 2.
-					expr_end_pos = expr_end_pos - 2;
-					keywords.length = keywords.length - 2;
-					break;
-
-				// SUBTRACTION
-				case '-':
-					// Exit early if the syntax is invalid
-					if (i < 2 || i == keywords.length - 1)
-					{
-						fprintf(stderr, "Invalid subtraction syntax!\n");
-						exit(EXIT_FAILURE);
-					}
-
-					// Convert from strings to doubles, divide param1 by param2 and get the result.
-					double sub_param1 = 0;
-					double sub_param2 = 0;
-					sscanf(keywords.array[i - 1], "%lf", &sub_param1);
-					sscanf(keywords.array[i + 1], "%lf", &sub_param2);
-					const double sub_expr_result = sub_param1 - sub_param2;
-
-					// Get the first number in the expression and allocate memory for the new value replacing it
-					keywords.array[i - 1] = malloc(sizeof(sub_expr_result) + 1);
-					sprintf(keywords.array[i - 1], "%lf", sub_expr_result);
-
-					for (int j = i; j < expr_end_pos; j++)
-					{
-						if (j + 2 >= keywords.length)
-						{
-							keywords.array[j] = NULL;
-							free(keywords.array[j]);
-							continue;
-						}
-						keywords.array[j] = malloc(sizeof(keywords.array[j + 2] + 1));
-						strcpy(keywords.array[j], keywords.array[j + 2]);
-					}
-
-					// Now that the keywords array is 2 keywords shorter, we need to decrement the expression's end-position by 2.
-					expr_end_pos = expr_end_pos - 2;
-					keywords.length = keywords.length - 2;
-					break;
-
-				default:
-					break;
+					fprintf(stderr, "Divide by zero error.\n");
+					exit(EXIT_FAILURE);
 				}
-				// This will break the for loop and restart the while loop
+				expr_result = param1 / param2;
+				break;
+			case '+':
+				expr_result = param1 + param2;
+				break;
+			case '-':
+				expr_result = param1 - param2;
+				break;
+			default:
+				// It shouldn't be able to reach this.
 				break;
 			}
-		}
 
+			// Get the first number in the expression and allocate memory for the new value replacing it
+			keywords.array[i - 1] = malloc(sizeof(expr_result) + 1);
+			sprintf(keywords.array[i - 1], "%lf", expr_result);
+
+			for (int j = i; j < expr_end_pos; j++)
+			{
+				if (j + 2 >= keywords.length)
+				{
+					keywords.array[j] = NULL;
+					free(keywords.array[j]);
+					continue;
+				}
+				keywords.array[j] = malloc(sizeof(keywords.array[j + 2] + 1));
+				strcpy(keywords.array[j], keywords.array[j + 2]);
+			}
+
+			// Now that the keywords array is 2 keywords shorter, we need to decrement the expression's end-position by 2.
+			expr_end_pos = expr_end_pos - 2;
+			keywords.length = keywords.length - 2;
+
+			// This will break the for loop and restart the while loop
+			break;
+		}
 		count++;
 	}
 
@@ -483,4 +375,14 @@ void dtos(double value, char* buffer)
 
 	// Otherwise print it as a double with 6 decimal places
 	sprintf(buffer, "%f", value);
+}
+
+
+// This is just for debugging. An easy-to-call function that prints an array of strings.
+void print_strings(string_array* strings)
+{
+	for (int i = 0; i < strings->length; i++)
+	{
+		printf("Print Each %i: %s\n", i, strings->array[i]);
+	}
 }
