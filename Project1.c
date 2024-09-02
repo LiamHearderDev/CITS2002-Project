@@ -143,7 +143,7 @@ void ml_assign_variable(char* name, const double value)
                 fprintf(stderr, "Memory allocation failed!\n");
                 exit(EXIT_FAILURE);
             }
-            memory_cache[i]->name = strdup("");
+            memory_cache[i]->name = _strdup("");
         }
         if (strcmp(memory_cache[i]->name, "") == 0)
         {
