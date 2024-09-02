@@ -135,16 +135,24 @@ int process_keywords(string_array keywords)
 
 void ml_assign_variable(char* name, const double value)
 {
-	for (int i = 0; i < 64; i++)
-	{
-		if (strcmp(memory_cache[i]->name, "") == 0)
-		{
-			memory_cache[i]->name = name;
-			memory_cache[i]->value = value;
-			return;
-		}
-	}
-	printf("VARIABLE ASSIGNMENT INVALID: OUT OF MEMORY\n");
+    for (int i = 0; i < 64; i++)
+    {
+        if (memory_cache[i] == NULL) {
+            memory_cache[i] = malloc(sizeof(memory_line));
+            if (memory_cache[i] == NULL) {
+                fprintf(stderr, "Memory allocation failed!\n");
+                exit(EXIT_FAILURE);
+            }
+            memory_cache[i]->name = _strdup("");
+        }
+        if (strcmp(memory_cache[i]->name, "") == 0)
+        {
+            memory_cache[i]->name = name;
+            memory_cache[i]->value = value;
+            return;
+        }
+    }
+    printf("VARIABLE ASSIGNMENT INVALID: OUT OF MEMORY\n");
 }
 
 void ml_print(string_array keywords)
