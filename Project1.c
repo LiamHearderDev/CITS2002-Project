@@ -289,6 +289,14 @@ int process_keywords(string_array keywords, memory_line* memory[64], int line_no
 			// Assigns function parameters to local memory
 			const int param_count = found_function->param_count;
 
+			// Validate that the number of parameters passed matches the number of parameters required
+           		 if (passed_param_count != param_count)
+		            {
+		                fprintf(stderr, "FUNCTION ERROR: Function '%s' expects %d parameters, but %d were provided.\n", 
+		                        found_function->name, param_count, passed_param_count);
+		                return 0; // Return an error if parameter counts don't match
+		            }
+
 			// if it needs parameters
 			if (param_count > 0)
 			{
