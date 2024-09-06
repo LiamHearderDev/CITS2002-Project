@@ -7,6 +7,8 @@
 
 #pragma warning(disable :5045) // NEED to remove this long before final draft. This disables a warning that linux might not have.
 
+#define MEMORY_LENGTH 64
+
 int main(int argc, char *argv[])
 {
 	// these two lines are just to get rid of a warning.
@@ -14,7 +16,7 @@ int main(int argc, char *argv[])
 	if (argv[1] == NULL) { return 0; }
 
 	// Opens the file and provides an error if it can't find it
-	FILE *file = fopen("sample03.ml", "r");
+	FILE *file = fopen("sample08.ml", "r");
 	if (file == NULL) {
 		perror("Error opening file");
 		return 0;
@@ -43,20 +45,15 @@ int main(int argc, char *argv[])
 
 		line_count++;
 	}
+	
 
 	// Function pass
 	// This loops over each line and looks for functions.
 	// If it finds a function, the function and all its contents are removed from file_lines and cached into a struct.
 	extract_functions(&file_lines);
 
-	// Process each line
-	for (int i = 0; i < file_lines.length; i++)
-	{
-		string_array keywords;
-		extract_keywords(file_lines.array[i], &keywords);
+	process_keywords(file_lines, memory_cache);
 
-		process_keywords(keywords, memory_cache, i);
-	}
 	return 1;
 }
 
@@ -201,13 +198,42 @@ void extract_functions(string_array* file_lines)
 					lines_to_remove_count++;
 				}
 
+				// Before we check if the function actually returns, initialise does_return as -1.
+				ml_function->does_return = -1;
+
+				// Iterate over each line and look for a return statement.
+				// If there is one (with valid syntax), then we mark the function as return.
+				for (int line_index = ml_function->lines.length-1; line_index >= 0; line_index--)
+				{
+					string_array function_line_keywords;
+					extract_keywords(ml_function->lines.array[line_index], &function_line_keywords);
+
+					// loop over each keyword
+					for (int keyword_index = 0; keyword_index < function_line_keywords.length; keyword_index++)
+					{
+						// Check if there is a return statement AND if it returns a value
+						if (strcmp(function_line_keywords.array[keyword_index], "return") == 0 && keyword_index + 1 != function_line_keywords.length)
+						{
+							// A valid return statement is found, so set does-return as a non-negative int.
+							ml_function->does_return = 1;
+
+							// Ensure both inner/outer loops are broken
+							goto early_exit;
+						}
+					}
+					// Need this continue so that "early_exit" isn't run every loop.
+					continue;
+
+					early_exit:
+						break;
+				}
 				// Remove the function's lines from file_lines
 				remove_strings_from_array(file_lines, i, i + lines_to_remove_count);
 
 				// Adds the function to function_cache
 				ml_add_function(ml_function);
 
-				// Need to DECREMENT `i` otherwise when we remove lines, we will accidentally skip a line. 
+				// Need to DECREMENT `i` otherwise when we remove lines, we will accidentally skip a line.
 				i--;
 			}
 		}
@@ -222,103 +248,90 @@ If it can't figure out what to do, it prints an error.
 
 @keywords = A string_array which lists every keyword in the line as well as the number of keywords.
 */
-int process_keywords(string_array keywords, memory_line* memory[64], int line_no)
+double process_keywords(string_array file_lines, memory_line* memory[64])
 {
-	for (int i = 0; i < keywords.length; i++)
+	//Loop over each line
+	for (int line_index = 0; line_index < file_lines.length; line_index++)
 	{
-		// COMMENTS
-		if (keywords.array[i][0] == '#')
-		{
-			return 1;
-		}
+		string_array keywords;
+		extract_keywords(file_lines.array[line_index], &keywords);
 
-		// VARIABLE ASSIGNMENTS
-		if (strcmp(keywords.array[i], "<-") == 0)
+		// Loop over each keyword in a line
+		for (int i = 0; i < keywords.length; i++)
 		{
-			// Error messages for incorrect syntax
-			if (keywords.length - 1 < 0 || keywords.length + 1 > 63 || i + 1 == keywords.length)
+			// COMMENTS
+			if (keywords.array[i][0] == '#')
 			{
-				fprintf(stderr, "VARIABLE ASSIGNMENT ERROR: Incorrect syntax.\n");
-				if (keywords.length - 1 < 0) { fprintf(stderr, "Assigning value to nothing!\n"); }
-				if (keywords.length + 1 > 63) { fprintf(stderr, "Assignment expression is too long!\n"); }
-				if (i + 1 == keywords.length) { fprintf(stderr, "Assigning nothing to variable!\n"); }
-				exit(EXIT_FAILURE);
+				goto early_continue;
 			}
 
-			// check for any expressions and handle them
-			char c_result[32];
-			calc_expression(keywords, i+1, keywords.length, c_result, memory);
-			double d_result;
-			sscanf(c_result, "%lf", &d_result);
-
-			// Assign the result of the expression to a variable
-			ml_assign_variable(keywords.array[i - 1], d_result, memory);
-			return 1;
-		}
-
-		// PRINTING
-		if (strcmp(keywords.array[i], "print") == 0)
-		{
-			if (keywords.length + 1 > 63 || i == keywords.length)
+			// VARIABLE ASSIGNMENTS
+			if (strcmp(keywords.array[i], "<-") == 0)
 			{
-				printf("PRINT FUNCTION ERROR: INVALID PRINT PARAMS.\n");
-				return 0;
-			}
-			ml_print(keywords, memory);
-			return 1;
-		}
-
-		// FUNCTIONS
-		if (ml_check_function(keywords.array[i]))
-		{
-			// retrieves the function
-			function* found_function = ml_retrieve_function(keywords.array[i]);
-
-			// Assigns function parameters to local memory
-			const int param_count = found_function->param_count;
-
-			// if it needs parameters
-			if (param_count > 0)
-			{
-				// Loop over found parameters and add them to memory
-				for (int j = 0; j < param_count; j++)
+				// Error messages for incorrect syntax
+				if (keywords.length - 1 < 0 || keywords.length + 1 > 63 || i + 1 == keywords.length)
 				{
-					// This offset is defined so we can use `j + offset` to retrieve the strings and
-					// also `j` to know the index of parameter being passed through.
-					const int offset = i + 1;
-
-					// If the memory is invalid (it doesn't think there are supposed to be params) then break.
-					if (strcmp(found_function->local_memory[j]->name, "") == 0)	{ break; }
-
-					// Extract parameter values without brackets or comma's
-					char* c_param = malloc(sizeof(keywords.array[j + offset])+1);
-					strcpy(c_param, keywords.array[j+offset]);
-					remove_character('(', c_param);
-					remove_character(')', c_param);
-					remove_character(',', c_param);
-
-					// turn parameters into doubles
-					double d_param = 0;
-					sscanf(c_param, "%lf", &d_param);
-
-					// Store parameters into local_memory
-					found_function->local_memory[j]->value = d_param;
+					fprintf(stderr, "VARIABLE ASSIGNMENT ERROR: Incorrect syntax.\n");
+					if (keywords.length - 1 < 0) { fprintf(stderr, "Assigning value to nothing!\n"); }
+					if (keywords.length + 1 > 63) { fprintf(stderr, "Assignment expression is too long!\n"); }
+					if (i + 1 == keywords.length) { fprintf(stderr, "Assigning nothing to variable!\n"); }
+					exit(EXIT_FAILURE);
 				}
+
+				// check for any expressions and handle them
+				char c_result[32];
+				calc_expression(keywords, i + 1, keywords.length, c_result, memory);
+				double d_result;
+				sscanf(c_result, "%lf", &d_result);
+
+				// Assign the result of the expression to a variable
+				ml_assign_variable(keywords.array[i - 1], d_result, memory);
+				goto early_continue;
 			}
 
-			// Loop over each line in the function, extract keywords and process them.
-			for (int j = 0; j < found_function->lines.length; j++)
+			// PRINTING
+			if (strcmp(keywords.array[i], "print") == 0)
 			{
-				string_array function_keywords;
-				extract_keywords(found_function->lines.array[j], &function_keywords);
-
-				process_keywords(function_keywords, found_function->local_memory, j+100);
+				if (keywords.length + 1 > 63 || i == keywords.length)
+				{
+					printf("PRINT FUNCTION ERROR: INVALID PRINT PARAMS.\n");
+					goto early_continue;
+				}
+				ml_print(keywords, memory);
+				goto early_continue;
 			}
-			return 1;
+
+			// RETURN
+			if (strcmp(keywords.array[i], "return") == 0)
+			{
+				// If returning nothing, then just end it here
+				if (i + 1 == keywords.length) { return 0.0; }
+
+				// Check for any expressions and handle them
+				char c_result[32];
+				calc_expression(keywords, i + 1, keywords.length, c_result, memory);
+				double d_result;
+				sscanf(c_result, "%lf", &d_result);
+
+				return d_result;
+			}
+
+			// FUNCTIONS
+			if (parse_function_syntax(&keywords, i) != -1)
+			{
+				// If a function was actually handled, then continue.
+				goto early_continue;
+			}
 		}
+
+		fprintf(stderr, "Invalid statements! Error occurred at: `%s`\n", file_lines.array[line_index]);
+		exit(EXIT_FAILURE);
+
+		// Allows for each statement to continue the outer loop
+		early_continue:
+			continue;
 	}
-	// do an error message here
-	return 0;
+	return 1;
 }
 
 // When the processor finds an assignment keyword, then it will assign a value to a name.
@@ -477,6 +490,9 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 			dtos(retrieved_var_d, retrieved_var_s);
 			keywords.array[i] = malloc(sizeof(retrieved_var_d) + 1);
 			strcpy(keywords.array[i], retrieved_var_s);
+		} else
+		{
+			parse_function_syntax(&keywords, i);
 		}
 	}
 
@@ -485,23 +501,19 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 	int count = 0;
 	while (expr_end_pos - expr_start_pos > 1 && count < keywords.length)
 	{
-		
+		// Loop over each keyword in the expression
 		for (int i = expr_start_pos; i < expr_end_pos; i++)
 		{
-			// Make sure its a math symbol
+			// Check to make sure its a math symbol.
+			// Otherwise, check if its a function call.
 			if(strlen(keywords.array[i]) != 1 || isdigit(keywords.array[i][0]) || isalpha(keywords.array[i][0]))
 			{
-				//
-				//
-				// CHECK IF ITS A FUNCTION HERE THAT REQUIRES A RETURN
-				//
-				//
-				if(ml_check_function(keywords.array[i]))
+				if(parse_function_syntax(&keywords, i) != -1)
 				{
-
+					continue;
 				}
 
-				continue;
+				// unsure what it is...
 			}
 
 			// Get the math term we are using
@@ -509,8 +521,6 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 
 			// if the term isn't one of these, then don't do the following expressions
 			if (term != '*' && term != '/' && term != '+' && term != '-') { continue; }
-
-			// REWRITE
 
 			// Exit early if the syntax is invalid
 			if (i < 2 || i == keywords.length - 1)
@@ -606,7 +616,6 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 
 void ml_add_function(function* function_info)
 {
-
 	// returns the index where the processing should continue from in the file_lines array
 	for (int i = 0; i < 64; i++)
 	{
@@ -681,7 +690,6 @@ void print_strings(string_array* strings)
 }
 
 // This is used to remove certain elements from an array of strings.
-// Created to remove function lines from "file_lines".
 // Another in-place removal
 void remove_strings_from_array(string_array* str_array, int start_pos, int end_pos)
 {
@@ -690,27 +698,207 @@ void remove_strings_from_array(string_array* str_array, int start_pos, int end_p
 	{
 		if (index < start_pos || index >= end_pos)
 		{
+			printf("KEEPING:  %s\n", str_array->array[index]);
 			str_array->array[next_string_pos] = str_array->array[index];
 			next_string_pos++;
 		}
+		else
+		{
+			printf("REMOVING: %s\n", str_array->array[index]);
+		}
 	}
 	str_array->length = next_string_pos;
+	printf("\n");
 }
 
-/* return ideas
+// This will parse the syntax of a function call
+// @keywords = the keywords passed in.
+// @start_pos = the position in the keywords where the function call begins.
+int parse_function_syntax(string_array* keywords, int start_pos)
+{
+	/*
+	//	Create a new string_array "function_keywords" to store the function call keywords.
+	//	start_pos is where the function name is.
+	//	Need to iterate over each character after start_pos and find the first ')' and remove all other keywords from function_keywords.
+	//	Then need to add replace all '(', ',' and ')' chars with a space.
+	//	Keep track of how many spaces have been added. Subtract the added spaces from the keyword count and that's how many keywords we replace later.
+	//	Then extract keywords from the resultant string.
+		Process the function, if it returns anything (using return as an attribute) then we get the return from process_keywords
+		Replace a number of strings (calculated earlier) in the original keywords with the returned result.
+	*/
 
-- When extracting a function, check if it has a return statement.
-- If it does, then we can add that as an attribute in the struct TRUE/FALSE for "return".
-- In expressions, we can look for a function, and check if it returns something.
-- If it does return something, then execute the code and receive the returned value,
-	replacing the function call in the expression.
+	string_array function_keywords;
+	function_keywords.length = keywords->length;
 
-How to return:
-1) In calc_expressions, we check if a term is a function.
-2) We process the function.
-3) in process_keywords, we check if we find a return statement.
-4) If we do, process_keywords will return that double.
-5) calc_expression then takes the return statement, and replaces the function call with it.
+	// Ensure that function_keywords is the same as keywords
+	for (int i = 0; i < keywords->length; i++)
+	{
+		function_keywords.array[i] = keywords->array[i];
+	}
 
+	int end_pos = -1;
 
-*/
+	// Loop over each keyword (to find the end pos of the function call)
+	for (int keyword_index = start_pos; keyword_index < keywords->length; keyword_index++)
+	{
+		// Loop over each character (to find the first close bracket)
+		const int keyword_length = (int)strlen(keywords->array[keyword_index]);
+		for (int char_index = 0; char_index < keyword_length; char_index++)
+		{
+			// Find the first closing bracket, and set the end position as the next keyword.
+			if (keywords->array[keyword_index][char_index] == ')')
+			{
+				end_pos = keyword_index + 1 - start_pos;
+				goto early_break;
+			}
+		}
+		continue;
+		early_break:
+		printf("Startpos = %i\n", start_pos);
+		printf("Endpos: %i\n", end_pos);
+			break;
+
+	}
+
+	// Checks if there is no closing bracket to the function call.
+	if (end_pos == -1)
+	{
+		// THERE IS NO CLOSING BRACKET
+		// I am unsure if this should be an error, because it might not be a function call...
+		// anyway return failure here
+		return -1;
+	}
+
+	// remove all other keywords from function_keywords outside the function call keywords
+	if(start_pos != 0)
+	{
+		remove_strings_from_array(&function_keywords, 0, start_pos);
+	}
+	remove_strings_from_array(&function_keywords, end_pos, function_keywords.length);
+	print_strings(&function_keywords);
+
+	// This is to know how many strings we need to replace with the return statement later.
+	int spaces_added = 0;
+
+	// Replace every "(", ",", ")" character with a space. 
+	// This will allow us to separate each keyword properly later. 
+	for (int keyword_index = 0; keyword_index < function_keywords.length; keyword_index++)
+	{
+		int keyword_length = strlen(function_keywords.array[keyword_index]);
+		for (int char_index = 0; char_index < keyword_length; char_index++)
+		{
+			const char character = function_keywords.array[keyword_index][char_index];
+			if (character == '(' || character == ')' || character == ',')
+			{
+				function_keywords.array[keyword_index][char_index] = ' ';
+				spaces_added++;
+			}
+		}
+	}
+
+	// Need to concatenate each keyword together into a single string.
+	// This allows us to then extract keywords properly.
+	char keyword_stream[64] = "";
+	for(int i = 0; i < function_keywords.length; i++)
+	{
+		strcat(keyword_stream, function_keywords.array[i]);
+	}
+	keyword_stream[strlen(keyword_stream)] = '\0';
+
+	// Now extract the parsed keywords.
+	string_array parsed_keywords;
+	extract_keywords(keyword_stream, &parsed_keywords);
+
+	// Check if the function is actually real.
+	if (ml_check_function(parsed_keywords.array[0]))
+	{
+		// retrieves the function
+		function* found_function = ml_retrieve_function(parsed_keywords.array[0]);
+
+		if (parsed_keywords.length-1 != found_function->param_count)
+		{
+			/*printf("\n");
+			print_strings(&parsed_keywords);
+			printf("\n");*/
+			
+			fprintf(stderr, "ERROR: Invalid function parameters for function `%s`\n", found_function->name);
+			exit(EXIT_FAILURE);
+		}
+
+		// loop over the parameters and add them into local memory
+		for (int i = 0; i < parsed_keywords.length-1; i++) // need -1 to exclude the function name
+		{
+
+			// Convert the parameter from a string into a double
+			double d_param;
+			sscanf(parsed_keywords.array[i+1], "%lf", &d_param); // Need +1 to skip the function name
+
+			// Go to the same place in local memory and update
+			found_function->local_memory[i]->value = d_param;
+		}
+
+		// Add global variables into local memory.
+		// Maybe this will be tested, maybe not. But whats the point of separating local and global memory if we don't
+		// ever use scope?
+		for (int i = 0; i < MEMORY_LENGTH; i++)
+		{
+			// Throw an error if allocated memory is exceeded.
+			if (i + found_function->param_count >= MEMORY_LENGTH)
+			{
+				printf("ERROR: Out of memory! Could not assign global variables to local memory.");
+				exit(EXIT_FAILURE);
+			}
+
+			// If we reach an empty memory slot, break.
+			if(memory_cache[i] == NULL)
+			{
+				break;
+			}
+			if (strcmp(memory_cache[i]->name, "") == 0)
+			{
+				break;
+			}
+
+			// Get global variable at index i
+			char* name = malloc(sizeof(memory_cache[i]->name));
+			strcpy(name, memory_cache[i]->name);
+			double value = memory_cache[i]->value;
+
+			// Allocate space for it in local memory
+			found_function->local_memory[i + found_function->param_count]->name = malloc(sizeof(name));
+			strcpy(found_function->local_memory[i + found_function->param_count]->name, name);
+
+			// Copy it into local memory at offset position (accounting for params)
+			found_function->local_memory[i + found_function->param_count]->value = value;
+		}
+
+		// process the keywords and store the returned result.
+		const double returned_result = process_keywords(found_function->lines, found_function->local_memory);
+
+		// check if found_function returns a value.
+		if (found_function->does_return != -1)
+		{
+			// This calculates how many keywords in the original line we need to replace with the returned result
+			// We need to do a -1 at the end to account for the string we wish to keep (the result).
+			int replace_count = parsed_keywords.length - spaces_added - 1;
+
+			// Turn returned_result into a string from a double
+			char buffer[16];
+			dtos(returned_result, buffer);
+
+			// allocate enough space for the result, and copy it into the space
+			keywords->array[start_pos] = NULL;
+			keywords->array[start_pos] = malloc(sizeof(buffer));
+			strcpy(keywords->array[start_pos], buffer);
+
+			// remove the rest of the function call
+			remove_strings_from_array(keywords, start_pos + 1, replace_count+start_pos);
+		}
+
+		// Return a non-negative number to indicate it found and handled a function.
+		return 1;
+	}
+
+	// If it hits this, then it isn't a function and we return a negative number.
+	return -1;
+}
