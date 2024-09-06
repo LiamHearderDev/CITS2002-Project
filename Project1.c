@@ -234,10 +234,10 @@ If it can't figure out what to do, it prints an error.
 
 @keywords = A string_array which lists every keyword in the line as well as the number of keywords.
 */
-int process_keywords(string_array keywords, memory_line* memory[64], int line_no)
+int process_keywords(string_array keywords, memory_line* memory[MEMORY_LENGTH], int line_no) 
 {
-	for (int i = 0; i < keywords.length; i++)
-	{
+    for (int i = 0; i < MEMORY_LENGTH; i++)
+	    {
 		// COMMENTS
 		if (keywords.array[i][0] == '#')
 		{
@@ -344,11 +344,10 @@ int process_keywords(string_array keywords, memory_line* memory[64], int line_no
 // When the processor finds an assignment keyword, then it will assign a value to a name.
 // The value (double) and name (string) are stored inside a struct called "memory_line",
 // and that is cached in an array of memory_lines. 
-void ml_assign_variable(char* name, const double value, memory_line* memory[64])
+void ml_assign_variable(char* name, const double value, memory_line* memory[MEMORY_LENGTH])
 {
-	
-	for (int i = 0; i < 64; i++)
-	{
+    for (int i = 0; i < MEMORY_LENGTH; i++) 
+    {
 		if (memory[i] == NULL) {
 			memory[i] = malloc(sizeof(memory_line));
 			if (memory[i] == NULL) {
@@ -372,10 +371,10 @@ void ml_assign_variable(char* name, const double value, memory_line* memory[64])
 
 // Checks if a variable of a specified name exists in the memory_cache.
 // If the variable exists, this function returns true. False if not.
-bool ml_check_variable(const char* name, memory_line* memory[64])
+bool ml_check_variable(const char* name, memory_line* memory[MEMORY_LENGTH])
 {
-	for (int i = 0; i < 64; i++)
-	{
+    for (int i = 0; i < MEMORY_LENGTH; i++) 
+    {
 		if (memory[i] == NULL) 
 		{
 			memory[i] = malloc(sizeof(memory_line));
@@ -397,9 +396,8 @@ bool ml_check_variable(const char* name, memory_line* memory[64])
 
 bool ml_check_function(const char* name)
 {
-	
-	for (int i = 0; i < 64; i++)
-	{
+    for (int i = 0; i < MEMORY_LENGTH; i++)
+	    {
 		if (functions_cache[i] == NULL) {
 			functions_cache[i] = malloc(sizeof(memory_line));
 			if (functions_cache[i] == NULL) {
@@ -421,11 +419,10 @@ bool ml_check_function(const char* name)
 // This function retrieves a ml_function that was previously assigned by ML code.
 // When ML code has a keyword that isn't recognized, we assume it's a variable or a function that needs to be retrieved.
 // "ml_check_function" MUST be run first.
-function* ml_retrieve_function(const char* name)
+function* ml_retrieve_function(const char* name) 
 {
-	// Iterate over all memory until it finds the right one
-	for (int i = 0; i < 64; i++)
-	{
+    for (int i = 0; i < MEMORY_LENGTH; i++) 
+    {
 		// Check name of var to see if it matches
 		if (strcmp(functions_cache[i]->name, name) == 0)
 		{
@@ -444,11 +441,10 @@ function* ml_retrieve_function(const char* name)
 // This function retrieves a variable that was previously assigned by ML code.
 // When ML code has a keyword that isn't recognized, we assume it's a variable or a function that needs to be retrieved.
 // "ml_check_variable" MUST be run first.
-double ml_retrieve_variable(const char* name, memory_line* memory[64])
+double ml_retrieve_variable(const char* name, memory_line* memory[MEMORY_LENGTH]) 
 {
-	// Iterate over all memory until it finds the right one
-	for (int i = 0; i < 64; i++)
-	{
+    for (int i = 0; i < MEMORY_LENGTH; i++)
+	    {
 		// Check name of var to see if it matches
 		if (strcmp(memory[i]->name, name) == 0)
 		{
@@ -464,11 +460,10 @@ double ml_retrieve_variable(const char* name, memory_line* memory[64])
 	return 0;
 }
 
-void ml_print(string_array keywords, memory_line* memory[64])
+void ml_add_function(function* function_info)
 {
-	// Check if the first keyword is "print". If it isn't, then the syntax is invalid.
-	if (strcmp(keywords.array[0], "print") != 0)
-	{
+    for (int i = 0; i < MEMORY_LENGTH; i++) 
+    {
 		printf("PRINT FUNCTION ERROR : INVALID PRINT PARAMS.\n");
 		return;
 	}
@@ -481,13 +476,13 @@ void ml_print(string_array keywords, memory_line* memory[64])
 	
 }
 
-void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[64])
+void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[MEMORY_LENGTH])
 {
 	// This iterates over every keyword and finds any variables.
 	// This then replaces the variables with their values in the keywords array.
 	// For example: "x + y" becomes "2.5 + 3.5".
 	for (int i = expr_start_pos; i < expr_end_pos; i++)
-	{
+		{
 		// Replace every variable with its value
 		if (ml_check_variable(keywords.array[i], memory))
 		{
@@ -667,7 +662,7 @@ void ml_add_function(function* function_info)
 {
 
 	// returns the index where the processing should continue from in the file_lines array
-	for (int i = 0; i < 64; i++)
+	for (int i = 0; i < MEMORY_LENGTH; i++) 
 	{
 		
 		// Check to make sure none of the elements are NULL, as we cannot check if NULL structs are empty.
