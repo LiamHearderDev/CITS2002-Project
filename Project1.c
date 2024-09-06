@@ -367,7 +367,7 @@ void ml_assign_variable(char* name, const double value, memory_line* memory[64])
 // If the variable exists, this function returns true. False if not.
 bool ml_check_variable(const char* name, memory_line* memory[64])
 {
-	for (int i = 0; i < 64; i++)
+	for (int i = 0; i < MEMORY_LENGTH; i++)
 	{
 		if (memory[i] == NULL) 
 		{
@@ -388,10 +388,11 @@ bool ml_check_variable(const char* name, memory_line* memory[64])
 	return false;
 }
 
+
 bool ml_check_function(const char* name)
 {
 	
-	for (int i = 0; i < 64; i++)
+	for (int i = 0; i < MEMORY_LENGTH; i++)
 	{
 		if (functions_cache[i] == NULL) {
 			functions_cache[i] = malloc(sizeof(memory_line));
@@ -417,7 +418,7 @@ bool ml_check_function(const char* name)
 function* ml_retrieve_function(const char* name)
 {
 	// Iterate over all memory until it finds the right one
-	for (int i = 0; i < 64; i++)
+	for (int i = 0; i < MEMORY_LENGTH; i++)
 	{
 		// Check name of var to see if it matches
 		if (strcmp(functions_cache[i]->name, name) == 0)
@@ -440,7 +441,7 @@ function* ml_retrieve_function(const char* name)
 double ml_retrieve_variable(const char* name, memory_line* memory[64])
 {
 	// Iterate over all memory until it finds the right one
-	for (int i = 0; i < 64; i++)
+	for (int i = 0; i < MEMORY_LENGTH; i++)
 	{
 		// Check name of var to see if it matches
 		if (strcmp(memory[i]->name, name) == 0)
@@ -675,17 +676,11 @@ void remove_strings_from_array(string_array* str_array, int start_pos, int end_p
 	{
 		if (index < start_pos || index >= end_pos)
 		{
-			//printf("KEEPING:  %s\n", str_array->array[index]);
 			str_array->array[next_string_pos] = str_array->array[index];
 			next_string_pos++;
 		}
-		else
-		{
-			//printf("REMOVING: %s\n", str_array->array[index]);
-		}
 	}
 	str_array->length = next_string_pos;
-	//printf("\n");
 }
 
 /*
@@ -702,17 +697,11 @@ void remove_other_strings_from_array(string_array* str_array, int start_pos, int
 	{
 		if (index >= start_pos && index < end_pos)
 		{
-			//printf("KEEPING:  %s\n", str_array->array[index]);
 			str_array->array[next_string_pos] = str_array->array[index];
 			next_string_pos++;
 		}
-		else
-		{
-			//printf("REMOVING: %s\n", str_array->array[index]);
-		}
 	}
 	str_array->length = next_string_pos;
-	//printf("\n");
 }
 // This will parse the syntax of a function call
 // @keywords = the keywords passed in.
@@ -760,8 +749,6 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 		}
 		continue;
 		early_break:
-		//printf("startpos: %i\n", start_pos);
-		//printf("endpos: %i\n", end_pos);
 			break;
 
 	}
@@ -786,7 +773,7 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 	// This will allow us to separate each keyword properly later. 
 	for (int keyword_index = 0; keyword_index < function_keywords.length; keyword_index++)
 	{
-		int keyword_length = strlen(function_keywords.array[keyword_index]);
+		const int keyword_length = (int)strlen(function_keywords.array[keyword_index]);
 		for (int char_index = 0; char_index < keyword_length; char_index++)
 		{
 			const char character = function_keywords.array[keyword_index][char_index];
