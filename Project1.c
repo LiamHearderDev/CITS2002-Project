@@ -474,145 +474,83 @@ void ml_print(string_array keywords, memory_line* memory[64])
 	
 }
 
-void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[64])
-{
-	// This iterates over every keyword and finds any variables.
-	// This then replaces the variables with their values in the keywords array.
-	// For example: "x + y" becomes "2.5 + 3.5".
-	for (int i = expr_start_pos; i < expr_end_pos; i++)
-	{
-		// Replace every variable with its value
-		if (ml_check_variable(keywords.array[i], memory))
-		{
-			char* retrieved_var_s = "";
-			const double retrieved_var_d = ml_retrieve_variable(keywords.array[i], memory);
-			retrieved_var_s = malloc(sizeof(retrieved_var_d) + 1);
-			dtos(retrieved_var_d, retrieved_var_s);
-			keywords.array[i] = malloc(sizeof(retrieved_var_d) + 1);
-			strcpy(keywords.array[i], retrieved_var_s);
-		} else
-		{
-			parse_function_syntax(&keywords, i);
-		}
-	}
+void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[MEMORY_LENGTH]) // Two plus two is four Minus one that's three, quick maths skrra
+    //Replacing variables with their values
+    for (int i = expr_start_pos; i < expr_end_pos; i++) 
+    {
+        if (ml_check_variable(keywords.array[i], memory)) 
+        {
+            char* retrieved_var_s = malloc(32); // Allocate memory for variable string
+            double retrieved_var_d = ml_retrieve_variable(keywords.array[i], memory);
+            snprintf(retrieved_var_s, 32, "%.6f", retrieved_var_d); // Convert to string
+            keywords.array[i] = realloc(keywords.array[i], strlen(retrieved_var_s) + 1);
+            strcpy(keywords.array[i], retrieved_var_s);
+            free(retrieved_var_s);
+        }
+    }
 
-	// This loops over the keywords while there is more than 1 keyword in the expression to calculate.
-	// Added "count" to ensure the while loop can't go infinitely if there is a syntax error in the expression.
-	int count = 0;
-	while (expr_end_pos - expr_start_pos > 1 && count < keywords.length)
-	{
-		// Loop over each keyword in the expression
-		for (int i = expr_start_pos; i < expr_end_pos; i++)
-		{
-			// Check to make sure its a math symbol.
-			// Otherwise, check if its a function call.
-			if(strlen(keywords.array[i]) != 1 || isdigit(keywords.array[i][0]) || isalpha(keywords.array[i][0]))
-			{
-				if(parse_function_syntax(&keywords, i) != -1)
-				{
-					continue;
-				}
+    // Outer loop to handle two passes (multiplication/division, then addition/subtraction)
+    for (int pass_index = 0; pass_index < 2; pass_index++) 
+    {
+        char* operator = pass_index == 0 ? "*/" : "+-"; // Select operator based on pass
 
-				// unsure what it is...
-			}
+        int count = 0;
+        // using while loop to evaluate the expression
+        while (expr_end_pos - expr_start_pos > 1 && count < keywords.length) 
+        {
+            for (int i = expr_start_pos; i < expr_end_pos; i++) 
+            {
+                if (keywords.array[i][0] == operator[0] || keywords.array[i][0] == operator[1]) 
+                {
+                    // Parse the numbers before and after the operator
+                    double param1 = 0, param2 = 0;
+                    sscanf(keywords.array[i - 1], "%lf", &param1);
+                    sscanf(keywords.array[i + 1], "%lf", &param2);
 
-			// Get the math term we are using
-			const char term = keywords.array[i][0];
+                    double result = 0;
 
-			// if the term isn't one of these, then don't do the following expressions
-			if (term != '*' && term != '/' && term != '+' && term != '-') { continue; }
+                    // Performing the operation based on the current operator
+                    switch (keywords.array[i][0]) 
+                    {
+                        case '*':
+                            result = param1 * param2;
+                            break;
+                        case '/':
+                            if (param2 == 0.0) 
+                            {
+                                fprintf(stderr, "Error: Division by zero.\n");
+                                exit(EXIT_FAILURE);
+                            }
+                            result = param1 / param2;
+                            break;
+                        case '+':
+                            result = param1 + param2;
+                            break;
+                        case '-':
+                            result = param1 - param2;
+                            break;
+                    }
 
-			// Exit early if the syntax is invalid
-			if (i < 2 || i == keywords.length - 1)
-			{
-				fprintf(stderr, "Invalid math expression syntax!\n");
-				exit(EXIT_FAILURE);
-			}
+                    // Storing the result back into the array at the position of param1
+                    snprintf(keywords.array[i - 1], 32, "%.6f", result);
 
-			// Convert from strings to doubles, multiply the numbers together and get the result.
-			double param1 = 0;
-			double param2 = 0;
-			sscanf(keywords.array[i - 1], "%lf", &param1);
-			sscanf(keywords.array[i + 1], "%lf", &param2);
+                    // Shifting the remaining elements to remove the operator and param2
+                    for (int j = i; j < expr_end_pos - 2; j++) 
+                    {
+                        keywords.array[j] = keywords.array[j + 2];
+                    }
 
-			double expr_result = 0;
-
-			switch(term)
-			{
-			case '*':
-				expr_result = param1 * param2;
-				break;
-			case '/':
-				if(param1 == 0.0 || param2 == 0.0)
-				{
-					fprintf(stderr, "Divide by zero error.\n");
-					exit(EXIT_FAILURE);
-				}
-				expr_result = param1 / param2;
-				break;
-			case '+':
-				expr_result = param1 + param2;
-				break;
-			case '-':
-				expr_result = param1 - param2;
-				break;
-			default:
-				// It shouldn't be able to reach this.
-				break;
-			}
-
-			// Get the first number in the expression and allocate memory for the new value replacing it
-			keywords.array[i - 1] = malloc(sizeof(expr_result) + 1);
-			sprintf(keywords.array[i - 1], "%lf", expr_result);
-
-			for (int j = i; j < expr_end_pos; j++)
-			{
-				if (j + 2 >= keywords.length)
-				{
-					keywords.array[j] = NULL;
-					continue;
-				}
-				keywords.array[j] = malloc(sizeof(keywords.array[j + 2] + 1));
-				strcpy(keywords.array[j], keywords.array[j + 2]);
-			}
-
-			// Now that the keywords array is 2 keywords shorter, we need to decrement the expression's end-position by 2.
-			expr_end_pos = expr_end_pos - 2;
-			keywords.length = keywords.length - 2;
-
-			// This will break the for loop and restart the while loop
-			break;
-		}
-		count++;
-	}
-
-	// These functions will only execute once the expression is 1 string long (either a variable or number)
-
-	// This checks if the keyword is a number
-	if (isdigit(keywords.array[expr_start_pos][0]))
-	{
-		double number = 0;
-		sscanf(keywords.array[expr_start_pos], "%lf", &number);
-
-		char* retrieved_var_s = "";
-		retrieved_var_s = malloc(sizeof(number) + 1);
-		dtos(number, retrieved_var_s);
-		strcpy(stream, retrieved_var_s);
-		return;
-	}
-
-	// This will then check if it is a variable
-	if(ml_check_variable(keywords.array[expr_start_pos], memory))
-	{
-		char* retrieved_var_s = "";
-		const double retrieved_var_d = ml_retrieve_variable(keywords.array[expr_start_pos], memory);
-		retrieved_var_s = malloc(sizeof(retrieved_var_d) + 1);
-		dtos(retrieved_var_d, retrieved_var_s);
-		strcpy(stream, retrieved_var_s);
-		return;
-	}
-	return;
+                    expr_end_pos -= 2; // Adjusting expression end position
+                    i--; // Adjusting index to recheck the shifted array
+                }
+            }
+            count++;
+        }
+    }
+    //Copying the final result to the output stream
+    strcpy(stream, keywords.array[expr_start_pos]);
 }
+
 
 void ml_add_function(function* function_info)
 {
