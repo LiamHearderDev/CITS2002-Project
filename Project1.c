@@ -483,98 +483,93 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 	// This loops over the keywords while there is more than 1 keyword in the expression to calculate.
 	// Added "count" to ensure the while loop can't go infinitely if there is a syntax error in the expression.
 	int count = 0;
-	while (expr_end_pos - expr_start_pos > 1 && count < keywords.length)
+while (expr_end_pos - expr_start_pos > 1 && count < keywords.length) 
+{
+	for (int i = expr_start_pos; i < expr_end_pos; i++) 
 	{
-		
-		for (int i = expr_start_pos; i < expr_end_pos; i++)
+		// check if it's * or /
+		if (strcmp(keywords.array[i], "*") == 0 || strcmp(keywords.array[i], "/") == 0) 
 		{
-			// Make sure its a math symbol
-			if(strlen(keywords.array[i]) != 1 || isdigit(keywords.array[i][0]) || isalpha(keywords.array[i][0]))
+			double param1, param2, result;
+			sscanf(keywords.array[i - 1], "%lf", &param1); // get the number before
+			sscanf(keywords.array[i + 1], "%lf", &param2); // get the number after
+
+			// multiply or divide
+			if (strcmp(keywords.array[i], "*") == 0) 
 			{
-				//
-				//
-				// CHECK IF ITS A FUNCTION HERE THAT REQUIRES A RETURN
-				//
-				//
-				if(ml_check_function(keywords.array[i]))
+				result = param1 * param2;
+			} 
+			else if (strcmp(keywords.array[i], "/") == 0) 
+			{
+				if (param2 == 0) 
 				{
-
+					fprintf(stderr, "divide by zero.\n");
+					exit(EXIT_FAILURE); // end it all if divide by zero
 				}
-
-				continue;
+				result = param1 / param2;
 			}
 
-			// Get the math term we are using
-			const char term = keywords.array[i][0];
+			// replace the stuff with result
+			char result_str[32];
+			sprintf(result_str, "%lf", result);
+			keywords.array[i - 1] = strdup(result_str);
 
-			// if the term isn't one of these, then don't do the following expressions
-			if (term != '*' && term != '/' && term != '+' && term != '-') { continue; }
-
-			// REWRITE
-
-			// Exit early if the syntax is invalid
-			if (i < 2 || i == keywords.length - 1)
+			// shift everything left to remove the operator and second number
+			for (int j = i; j < expr_end_pos - 2; j++) 
 			{
-				fprintf(stderr, "Invalid math expression syntax!\n");
-				exit(EXIT_FAILURE);
+				keywords.array[j] = keywords.array[j + 2];
 			}
 
-			// Convert from strings to doubles, multiply the numbers together and get the result.
-			double param1 = 0;
-			double param2 = 0;
-			sscanf(keywords.array[i - 1], "%lf", &param1);
-			sscanf(keywords.array[i + 1], "%lf", &param2);
-
-			double expr_result = 0;
-
-			switch(term)
-			{
-			case '*':
-				expr_result = param1 * param2;
-				break;
-			case '/':
-				if(param1 == 0.0 || param2 == 0.0)
-				{
-					fprintf(stderr, "Divide by zero error.\n");
-					exit(EXIT_FAILURE);
-				}
-				expr_result = param1 / param2;
-				break;
-			case '+':
-				expr_result = param1 + param2;
-				break;
-			case '-':
-				expr_result = param1 - param2;
-				break;
-			default:
-				// It shouldn't be able to reach this.
-				break;
-			}
-
-			// Get the first number in the expression and allocate memory for the new value replacing it
-			keywords.array[i - 1] = malloc(sizeof(expr_result) + 1);
-			sprintf(keywords.array[i - 1], "%lf", expr_result);
-
-			for (int j = i; j < expr_end_pos; j++)
-			{
-				if (j + 2 >= keywords.length)
-				{
-					keywords.array[j] = NULL;
-					continue;
-				}
-				keywords.array[j] = malloc(sizeof(keywords.array[j + 2] + 1));
-				strcpy(keywords.array[j], keywords.array[j + 2]);
-			}
-
-			// Now that the keywords array is 2 keywords shorter, we need to decrement the expression's end-position by 2.
-			expr_end_pos = expr_end_pos - 2;
-			keywords.length = keywords.length - 2;
-
-			// This will break the for loop and restart the while loop
-			break;
+			expr_end_pos -= 2;
+			keywords.length -= 2;
+			break; // go back and start over
 		}
-		count++;
 	}
+	count++;
+}
+
+// now do the same thing for + and -
+count = 0;
+while (expr_end_pos - expr_start_pos > 1 && count < keywords.length) 
+{
+	for (int i = expr_start_pos; i < expr_end_pos; i++) 
+	{
+		// check if it's + or -
+		if (strcmp(keywords.array[i], "+") == 0 || strcmp(keywords.array[i], "-") == 0) 
+		{
+			double param1, param2, result;
+			sscanf(keywords.array[i - 1], "%lf", &param1); // get the number before
+			sscanf(keywords.array[i + 1], "%lf", &param2); // get the number after
+
+			// add or subtract
+			if (strcmp(keywords.array[i], "+") == 0) 
+			{
+				result = param1 + param2;
+			} 
+			else if (strcmp(keywords.array[i], "-") == 0) 
+			{
+				result = param1 - param2;
+			}
+
+			// replace with result
+			char result_str[32];
+			sprintf(result_str, "%lf", result);
+			keywords.array[i - 1] = strdup(result_str);
+
+			// shift everything left to remove the operator and second number
+			for (int j = i; j < expr_end_pos - 2; j++) 
+			{
+				keywords.array[j] = keywords.array[j + 2];
+			}
+
+			expr_end_pos -= 2;
+			keywords.length -= 2;
+			break; // go back and start over
+		}
+	}
+	count++;
+}
+
 
 	// These functions will only execute once the expression is 1 string long (either a variable or number)
 
