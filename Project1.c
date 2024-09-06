@@ -474,86 +474,119 @@ void ml_print(string_array keywords, memory_line* memory[64])
 	
 }
 
-void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[MEMORY_LENGTH]) 
+void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[64])
 {
-    // Replacing variables with their values
-    for (int i = expr_start_pos; i < expr_end_pos; i++) 
-    {
-        if (ml_check_variable(keywords.array[i], memory)) 
-        {
-            char* retrieved_var_s = malloc(32); // Allocate memory for variable string
-            double retrieved_var_d = ml_retrieve_variable(keywords.array[i], memory);
-            snprintf(retrieved_var_s, 32, "%.6f", retrieved_var_d); // Convert to string
-            keywords.array[i] = realloc(keywords.array[i], strlen(retrieved_var_s) + 1);
-            strcpy(keywords.array[i], retrieved_var_s);
-            free(retrieved_var_s);
-        }
-    }
+	// This iterates over every keyword and finds any variables.
+	// This then replaces the variables with their values in the keywords array.
+	// For example: "x + y" becomes "2.5 + 3.5".
+	for (int i = expr_start_pos; i < expr_end_pos; i++)
+	{
+		// Replace every variable with its value
+		if (ml_check_variable(keywords.array[i], memory))
+		{
+			char* retrieved_var_s = "";
+			const double retrieved_var_d = ml_retrieve_variable(keywords.array[i], memory);
+			retrieved_var_s = malloc(sizeof(retrieved_var_d) + 1);
+			dtos(retrieved_var_d, retrieved_var_s);
+			keywords.array[i] = malloc(sizeof(retrieved_var_d) + 1);
+			strcpy(keywords.array[i], retrieved_var_s);
+		} else
+		{
+			parse_function_syntax(&keywords, i);
+		}
+	}
+	
+	// Outer loop to handle two passes (multiplication/division, then addition/subtraction)
+	for (int pass_index = 0; pass_index < 2; pass_index++)
+	{
+		char* operator = pass_index == 0 ? "*/" : "+-"; // Select operator based on pass
 
-    // Outer loop to handle two passes (multiplication/division, then addition/subtraction)
-    for (int pass_index = 0; pass_index < 2; pass_index++) 
-    {
-        char* operator = pass_index == 0 ? "*/" : "+-"; // Select operator based on pass
+		int count = 0;
 
-        int count = 0;
-        // Usingf while loop to evaluate the expression
-        while (expr_end_pos - expr_start_pos > 1 && count < keywords.length) 
-        {
-            for (int i = expr_start_pos; i < expr_end_pos; i++) 
-            {
-                // 1-character check ensures that we are only processing operators, not variable names or function calls
-                if (strlen(keywords.array[i]) == 1 && 
-                    (keywords.array[i][0] == operator[0] || keywords.array[i][0] == operator[1])) 
-                {
-                    // Parsing the numbers before and after the operator
-                    double param1 = 0, param2 = 0;
-                    sscanf(keywords.array[i - 1], "%lf", &param1);
-                    sscanf(keywords.array[i + 1], "%lf", &param2);
+		// Using a while loop to evaluate the expression
+		while (expr_end_pos - expr_start_pos > 1 && count < keywords.length)
+		{
+			for (int i = expr_start_pos; i < expr_end_pos; i++)
+			{
+				// 1-character check ensures that we are only processing operators, not variable names or function calls
+				if (strlen(keywords.array[i]) == 1 &&
+					(keywords.array[i][0] == operator[0] || keywords.array[i][0] == operator[1]))
+				{
+					// Parsing the numbers before and after the operator
+					double param1 = 0, param2 = 0;
+					sscanf(keywords.array[i - 1], "%lf", &param1);
+					sscanf(keywords.array[i + 1], "%lf", &param2);
 
-                    double result = 0;
+					double result = 0;
 
-                    // Perform the operation based on the current operator
-                    switch (keywords.array[i][0]) 
-                    {
-                        case '*':
-                            result = param1 * param2;
-                            break;
-                        case '/':
-                            if (param2 == 0.0) 
-                            {
-                                fprintf(stderr, "Error: Division by zero.\n");
-                                exit(EXIT_FAILURE);
-                            }
-                            result = param1 / param2;
-                            break;
-                        case '+':
-                            result = param1 + param2;
-                            break;
-                        case '-':
-                            result = param1 - param2;
-                            break;
-                    }
+					// Perform the operation based on the current operator
+					switch (keywords.array[i][0])
+					{
+					case '*':
+						result = param1 * param2;
+						break;
+					case '/':
+						if (param2 == 0.0)
+						{
+							fprintf(stderr, "Error: Division by zero.\n");
+							exit(EXIT_FAILURE);
+						}
+						result = param1 / param2;
+						break;
+					case '+':
+						result = param1 + param2;
+						break;
+					case '-':
+						result = param1 - param2;
+						break;
+					}
 
-                    // Storing the result back into the array at the position of param1
-                    snprintf(keywords.array[i - 1], 32, "%.6f", result);
+					// Storing the result back into the array at the position of param1
+					snprintf(keywords.array[i - 1], 32, "%.6f", result);
 
-                    // Shifting the remaining elements to remove the operator and param2
-                    for (int j = i; j < expr_end_pos - 2; j++) 
-                    {
-                        keywords.array[j] = keywords.array[j + 2];
-                    }
+					// Shifting the remaining elements to remove the operator and param2
+					for (int j = i; j < expr_end_pos - 2; j++)
+					{
+						keywords.array[j] = keywords.array[j + 2];
+					}
 
-                    expr_end_pos -= 2; // Adjust expression end position
-                    i--; // Adjusting index to recheck the shifted array
-                }
-            }
-            count++;
-        }
-    }
+					expr_end_pos -= 2; // Adjust expression end position
+					i--; // Adjusting index to recheck the shifted array
+				}
+			}
+			count++;
+		}
+	}
 
-//Copying the final result to the output stream
-    strcpy(stream, keywords.array[expr_start_pos]);
+
+	// These functions will only execute once the expression is 1 string long (either a variable or number)
+
+	// This checks if the keyword is a number
+	if (isdigit(keywords.array[expr_start_pos][0]))
+	{
+		double number = 0;
+		sscanf(keywords.array[expr_start_pos], "%lf", &number);
+
+		char* retrieved_var_s = "";
+		retrieved_var_s = malloc(sizeof(number) + 1);
+		dtos(number, retrieved_var_s);
+		strcpy(stream, retrieved_var_s);
+		return;
+	}
+
+	// This will then check if it is a variable
+	if(ml_check_variable(keywords.array[expr_start_pos], memory))
+	{
+		char* retrieved_var_s = "";
+		const double retrieved_var_d = ml_retrieve_variable(keywords.array[expr_start_pos], memory);
+		retrieved_var_s = malloc(sizeof(retrieved_var_d) + 1);
+		dtos(retrieved_var_d, retrieved_var_s);
+		strcpy(stream, retrieved_var_s);
+		return;
+	}
+	return;
 }
+
 void ml_add_function(function* function_info)
 {
 	// returns the index where the processing should continue from in the file_lines array
@@ -629,8 +662,12 @@ void print_strings(string_array* strings)
 	}
 }
 
-// This is used to remove certain elements from an array of strings.
-// Another in-place removal
+/*
+This is used to remove all elements, within an input boundary, from an array of strings.
+@str_array = string_array from which strings are removed.
+@start_pos = The first index at which strings should be removed. This index is also removed.
+@end_pos = The last index at which strings should be removed. This index is NOT removed.
+*/
 void remove_strings_from_array(string_array* str_array, int start_pos, int end_pos)
 {
 	int next_string_pos = 0;
@@ -638,19 +675,45 @@ void remove_strings_from_array(string_array* str_array, int start_pos, int end_p
 	{
 		if (index < start_pos || index >= end_pos)
 		{
-			printf("KEEPING:  %s\n", str_array->array[index]);
+			//printf("KEEPING:  %s\n", str_array->array[index]);
 			str_array->array[next_string_pos] = str_array->array[index];
 			next_string_pos++;
 		}
 		else
 		{
-			printf("REMOVING: %s\n", str_array->array[index]);
+			//printf("REMOVING: %s\n", str_array->array[index]);
 		}
 	}
 	str_array->length = next_string_pos;
-	printf("\n");
+	//printf("\n");
 }
 
+/*
+Fundamentally, the opposite of "remove_strings_from_array".
+This is used to remove all strings from an array except those within the input boundary.
+@str_array = string_array from which strings are removed.
+@start_pos = The first index at which strings should not be removed. This index is not removed.
+@end_pos = The last index at which strings should not be removed. This index is removed.
+*/
+void remove_other_strings_from_array(string_array* str_array, int start_pos, int end_pos)
+{
+	int next_string_pos = 0;
+	for (int index = 0; index < str_array->length; index++)
+	{
+		if (index >= start_pos && index < end_pos)
+		{
+			//printf("KEEPING:  %s\n", str_array->array[index]);
+			str_array->array[next_string_pos] = str_array->array[index];
+			next_string_pos++;
+		}
+		else
+		{
+			//printf("REMOVING: %s\n", str_array->array[index]);
+		}
+	}
+	str_array->length = next_string_pos;
+	//printf("\n");
+}
 // This will parse the syntax of a function call
 // @keywords = the keywords passed in.
 // @start_pos = the position in the keywords where the function call begins.
@@ -676,6 +739,9 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 		function_keywords.array[i] = keywords->array[i];
 	}
 
+	// If the name of the keyword we are checking doesn't start with a letter, safely assume it isn't a function.
+	if (!isalpha(function_keywords.array[start_pos][0])) { return -1; }
+
 	int end_pos = -1;
 
 	// Loop over each keyword (to find the end pos of the function call)
@@ -688,14 +754,14 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 			// Find the first closing bracket, and set the end position as the next keyword.
 			if (keywords->array[keyword_index][char_index] == ')')
 			{
-				end_pos = keyword_index + 1 - start_pos;
+				end_pos = keyword_index + 1;
 				goto early_break;
 			}
 		}
 		continue;
 		early_break:
-		printf("Startpos = %i\n", start_pos);
-		printf("Endpos: %i\n", end_pos);
+		//printf("startpos: %i\n", start_pos);
+		//printf("endpos: %i\n", end_pos);
 			break;
 
 	}
@@ -710,12 +776,8 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 	}
 
 	// remove all other keywords from function_keywords outside the function call keywords
-	if(start_pos != 0)
-	{
-		remove_strings_from_array(&function_keywords, 0, start_pos);
-	}
-	remove_strings_from_array(&function_keywords, end_pos, function_keywords.length);
-	print_strings(&function_keywords);
+	remove_other_strings_from_array(&function_keywords, start_pos, end_pos);
+
 
 	// This is to know how many strings we need to replace with the return statement later.
 	int spaces_added = 0;
@@ -756,19 +818,16 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 		function* found_function = ml_retrieve_function(parsed_keywords.array[0]);
 
 		if (parsed_keywords.length-1 != found_function->param_count)
-		{
-			/*printf("\n");
-			print_strings(&parsed_keywords);
-			printf("\n");*/
-			
+		{			
 			fprintf(stderr, "ERROR: Invalid function parameters for function `%s`\n", found_function->name);
 			exit(EXIT_FAILURE);
 		}
 
+		
+
 		// loop over the parameters and add them into local memory
 		for (int i = 0; i < parsed_keywords.length-1; i++) // need -1 to exclude the function name
 		{
-
 			// Convert the parameter from a string into a double
 			double d_param;
 			sscanf(parsed_keywords.array[i+1], "%lf", &d_param); // Need +1 to skip the function name
