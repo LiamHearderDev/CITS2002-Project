@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
 	if (argv[1] == NULL) { return 0; }
 
 	// Opens the file and provides an error if it can't find it
-	FILE *file = fopen("sample03.ml", "r");
+	FILE *file = fopen("sample05.ml", "r");
 	if (file == NULL) {
 		perror("Error opening file");
 		return 0;
@@ -200,6 +200,18 @@ void extract_functions(string_array* file_lines)
 					ml_function->lines.length++;
 					lines_to_remove_count++;
 				}
+
+				// Iterate over each line and look for a return statement.
+				// If there is one (with valid syntax), then we mark the function as return.
+				for (int line_index = 0; line_index < ml_function->lines.length; line_index++)
+				{
+					for (int keyword_index = 0; keyword_index < ml_function->lines.length; line_index++)
+					{
+						
+					}
+				}
+
+
 
 				// Remove the function's lines from file_lines
 				remove_strings_from_array(file_lines, i, i + lines_to_remove_count);
@@ -488,17 +500,56 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 		
 		for (int i = expr_start_pos; i < expr_end_pos; i++)
 		{
-			// Make sure its a math symbol
+			// Check to make sure its a math symbol.
+			// Otherwise, check if its a function call.
 			if(strlen(keywords.array[i]) != 1 || isdigit(keywords.array[i][0]) || isalpha(keywords.array[i][0]))
 			{
-				//
-				//
-				// CHECK IF ITS A FUNCTION HERE THAT REQUIRES A RETURN
-				//
-				//
 				if(ml_check_function(keywords.array[i]))
 				{
+					// retrieves the function
+					function* found_function = ml_retrieve_function(keywords.array[i]);
 
+					// Assigns function parameters to local memory
+					const int param_count = found_function->param_count;
+
+					// if it needs parameters
+					if (param_count > 0)
+					{
+						// Loop over found parameters and add them to memory
+						for (int j = 0; j < param_count; j++)
+						{
+							// This offset is defined so we can use `j + offset` to retrieve the strings and
+							// also `j` to know the index of parameter being passed through.
+							const int offset = i + 1;
+
+							// If the memory is invalid (it doesn't think there are supposed to be params) then break.
+							if (strcmp(found_function->local_memory[j]->name, "") == 0) { break; }
+
+							// Extract parameter values without brackets or comma's
+							char* c_param = malloc(sizeof(keywords.array[j + offset]) + 1);
+							strcpy(c_param, keywords.array[j + offset]);
+							remove_character('(', c_param);
+							remove_character(')', c_param);
+							remove_character(',', c_param);
+
+							// turn parameters into doubles
+							double d_param = 0;
+							sscanf(c_param, "%lf", &d_param);
+
+							// Store parameters into local_memory
+							found_function->local_memory[j]->value = d_param;
+						}
+					}
+
+					// Loop over each line in the function, extract keywords and process them.
+					for (int j = 0; j < found_function->lines.length; j++)
+					{
+						string_array function_keywords;
+						extract_keywords(found_function->lines.array[j], &function_keywords);
+
+						process_keywords(function_keywords, found_function->local_memory, j + 100);
+					}
+					
 				}
 
 				continue;
@@ -695,6 +746,99 @@ void remove_strings_from_array(string_array* str_array, int start_pos, int end_p
 		}
 	}
 	str_array->length = next_string_pos;
+}
+
+// This will parse the syntax of a function call
+// @keywords = the keywords passed in.
+// @start_pos = the position in the keywords where the function call begins.
+void parse_function_syntax(string_array* keywords, int start_pos)
+{
+	/*
+	//	Create a new string_array "function_keywords" to store the function call keywords.
+	//	start_pos is where the function name is.
+	//	Need to iterate over each character after start_pos and find the first ')' and remove all other keywords from function_keywords.
+	//	Then need to add replace all '(', ',' and ')' chars with a space.
+	//	Keep track of how many spaces have been added. Subtract the added spaces from the keyword count and that's how many keywords we replace later.
+	//	Then extract keywords from the resultant string.
+		Process the function, if it returns anything (using return as a param) then we get the return from process_keywords
+		Replace a number of strings (calculated earlier) in the original keywords with the returned result.
+	*/
+
+	string_array function_keywords;
+	function_keywords.length = keywords->length;
+
+	// Ensure that function_keywords is the same as keywords
+	for (int i = 0; i < keywords->length; i++)
+	{
+		function_keywords.array[i] = keywords->array[i];
+	}
+
+	int end_pos;
+
+	// Loop over each keyword (to find the end pos of the function call)
+	for (int keyword_index = start_pos; keyword_index < keywords->length; keyword_index++)
+	{
+		// Loop over each character (to find the first close bracket)
+		const int keyword_length = strlen(keywords->array[keyword_index]);
+		for (int char_index = 0; char_index < keyword_length; char_index++)
+		{
+			// Find the first closing bracket, and set the end position as the next keyword.
+			if (keywords->array[keyword_index][char_index] == ')')
+			{
+				end_pos = keyword_index + 1;
+			}
+		}
+	}
+
+	// remove all other keywords from function_keywords outside the function call keywords
+	if(start_pos != 0)
+	{
+		remove_strings_from_array(&function_keywords, 0, start_pos);
+	}
+	remove_strings_from_array(&function_keywords, end_pos, function_keywords.length);
+
+	int spaces_added = 0;
+
+	// Replace every "(", ",", ")" character with a space
+	for (int keyword_index = 0; keyword_index < function_keywords.length; keyword_index++)
+	{
+		int keyword_length = strlen(function_keywords.array[keyword_index]);
+		for (int char_index = 0; char_index < keyword_length; char_index++)
+		{
+			const char character = function_keywords.array[keyword_index][char_index];
+			if (character == '(' || character == ')' || character == ',')
+			{
+				function_keywords.array[keyword_index][char_index] = ' ';
+				spaces_added++;
+			}
+		}
+	}
+
+	char keyword_stream[64];
+	for(int i = 0; i < function_keywords.length; i++)
+	{
+		strcat(keyword_stream, function_keywords.array[i]);
+	}
+	keyword_stream[function_keywords.length] = '\0';
+	string_array parsed_function;
+	extract_keywords(keyword_stream, &function_keywords);
+
+
+	if (ml_check_function(parsed_function.array[0]))
+	{
+		// retrieves the function
+		function* found_function = ml_retrieve_function(keywords->array[start_pos]);
+
+		// Loop over each line in the function, extract keywords and process them.
+		for (int j = 0; j < found_function->lines.length; j++)
+		{
+			string_array function_keywords;
+			extract_keywords(found_function->lines.array[j], &function_keywords);
+
+			process_keywords(function_keywords, found_function->local_memory, j + 100);
+		}
+		return;
+	}
 }
 
 /* return ideas
