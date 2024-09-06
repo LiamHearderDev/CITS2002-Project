@@ -474,8 +474,9 @@ void ml_print(string_array keywords, memory_line* memory[64])
 	
 }
 
-void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[MEMORY_LENGTH]) // Two plus two is four Minus one that's three, quick maths skrra
-    //Replacing variables with their values
+void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[MEMORY_LENGTH]) 
+{
+    // Replacing variables with their values
     for (int i = expr_start_pos; i < expr_end_pos; i++) 
     {
         if (ml_check_variable(keywords.array[i], memory)) 
@@ -495,21 +496,23 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
         char* operator = pass_index == 0 ? "*/" : "+-"; // Select operator based on pass
 
         int count = 0;
-        // using while loop to evaluate the expression
+        // Usingf while loop to evaluate the expression
         while (expr_end_pos - expr_start_pos > 1 && count < keywords.length) 
         {
             for (int i = expr_start_pos; i < expr_end_pos; i++) 
             {
-                if (keywords.array[i][0] == operator[0] || keywords.array[i][0] == operator[1]) 
+                // 1-character check ensures that we are only processing operators, not variable names or function calls
+                if (strlen(keywords.array[i]) == 1 && 
+                    (keywords.array[i][0] == operator[0] || keywords.array[i][0] == operator[1])) 
                 {
-                    // Parse the numbers before and after the operator
+                    // Parsing the numbers before and after the operator
                     double param1 = 0, param2 = 0;
                     sscanf(keywords.array[i - 1], "%lf", &param1);
                     sscanf(keywords.array[i + 1], "%lf", &param2);
 
                     double result = 0;
 
-                    // Performing the operation based on the current operator
+                    // Perform the operation based on the current operator
                     switch (keywords.array[i][0]) 
                     {
                         case '*':
@@ -540,18 +543,17 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
                         keywords.array[j] = keywords.array[j + 2];
                     }
 
-                    expr_end_pos -= 2; // Adjusting expression end position
+                    expr_end_pos -= 2; // Adjust expression end position
                     i--; // Adjusting index to recheck the shifted array
                 }
             }
             count++;
         }
     }
-    //Copying the final result to the output stream
+
+//Copying the final result to the output stream
     strcpy(stream, keywords.array[expr_start_pos]);
 }
-
-
 void ml_add_function(function* function_info)
 {
 	// returns the index where the processing should continue from in the file_lines array
