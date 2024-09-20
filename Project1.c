@@ -5,55 +5,9 @@
 //  Platform:   Linux
 
 
-/*
-TO REMOVE:
-	print_strings()
- */
-
-/*
-	~~~~~~~~~ READ ME ~~~~~~~~~
-
- It is important to note that while the project description was describing a type of transpiler,
- the program that we created is much closer to that of a compiler.
-
- We misread the project description and didn't realise it was intended for students to translate
- ML programs into a C11 program then compile/execute that C11 file and display the output.
- In this fashion, the intended process could be described as:
-
-	Extract -> Validate -> Translate -> Write -> Compile -> Execute -> Delete
-
- We did not do this. We created a program which directly interprets ML, then executes it.
- Rather than translating ML code into C11, writing that code to a new file, then allowing the
- C11 compiler to handle memory and execution; we did all of that ourselves.
- The process of our program could be described as:
-
-	Extract -> Validate -> Interpret -> Execute
-
- What we ended up creating was significantly more complicated than what the assignment asked of us.
- After discovering our mistake, we immediately set to work creating a second program which does
- actually function like the transpiler that was described by the project description. However,
- we were unable to complete the transpiler in time, as we realised our mistake too late, so
- we are submitting the compiler which was finished around a week before Project 1 was due.
-
- Due to how we are now handling the execution of ML programs, rather than the C compiler, there are
- some key aspects that wouldn't be included in the creation of a transpiler. Namely, the storage
- and retrieval/execution of variables and functions. Significant portions of this program are
- dedicated to this purpose.
-
- While we understand we did not follow the project description (we are not translating/compiling/writing
- to a file), we believe this program should still be marked accordingly. 
 
  
 
- Sections Included in this file:
-  1. includes
-  2. macros
-  3. structure definition
-  4. global variable definitions
-  5. function definitions
-  6. function implementations
-  
-*/
 
 
 // ~~~~~~~~~~ 1. Includes ~~~~~~~~~~ //
