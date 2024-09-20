@@ -5,8 +5,17 @@
 //  Platform:   Linux
 
 
+/*
 
- 
+ Sections Included in this file:
+  1. includes
+  2. macros
+  3. structure definition
+  4. global variable definitions
+  5. function definitions
+  6. function implementations
+  
+*/
 
 
 
@@ -19,6 +28,7 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <unistd.h>
+
 
 
 // ~~~~~~~~~~ 2. Macros ~~~~~~~~~~ //
@@ -144,11 +154,10 @@ void ml_add_function(function* function_info);
 void dtos(double value, char* buffer);
 int is_real_num(char* string);
 void remove_character(char to_remove, char* stream);
-void remove_strings_from_array(string_array* str_array, int start_pos, int end_pos, int reverse);
+void remove_strings_from_array(string_array* str_array, int start_pos, int end_pos, bool reverse);
 double fmod(const double X, const double Y);
 int print_error(char* string, bool should_exit);
 int print_lines();
-void print_strings(string_array* strings);
 
 
 
@@ -177,11 +186,11 @@ int main(int argc, char* argv[])
 	{
 		for (int i = 2; i < argc; i++)
 		{
-			// Make name of variable
+			// Format the name of the argument
 			char name[IDENTIFIER_NAME_LENGTH];
 			sprintf(name, "arg%i", i - 2);
 
-			// Make value of variable
+			// Get the value of the argument
 			double value;
 			const int scanf_status = sscanf(argv[i], "%lf", &value);
 			if (scanf_status != 1)
@@ -193,8 +202,6 @@ int main(int argc, char* argv[])
 			ml_assign_variable(name, value, memory_cache);
 		}
 	}
-	
-
 
 	// Creates a string_array which will contain each line from the file.
 	string_array file_lines;
@@ -211,16 +218,16 @@ int main(int argc, char* argv[])
 	close(ml_fd);
 
 	// This loops over each line and looks for functions.
-	// If it finds a function, the function and all its contents are removed from file_lines and cached into a struct.
+	// If it finds a function, the function and all its contents are removed from file_lines and cached into functions_cache.
 	extract_functions(&file_lines);
 
-	// Execute the functionality from the rest of the lines.
+	// Execute the functionality from any remaining lines.
 	process_lines(file_lines, memory_cache);
 
-	// Print everything to screen
+	// Print outputs to screen
 	print_lines();
 
-	return 1;
+	exit(EXIT_SUCCESS);
 }
 
 /*
@@ -358,6 +365,8 @@ int extract_lines_from_fd(int fd, string_array* line_stream)
  be prematurely executed.
 
  This function is a separate pass for the sake of readability.
+
+ @file_lines = The file lines from which lines with functions in them are extracted.
 */
 void extract_functions(string_array* file_lines)
 {
@@ -366,11 +375,23 @@ void extract_functions(string_array* file_lines)
 	// with the same name as global variables.
 	memory_line* temp_variables[MEMORY_LENGTH];
 
-	for (int p = 0; p < MEMORY_LENGTH; p++)
+	// Copies current global memory into this temp memory
+	// The only variables that can be passed through at this point are arguments.
+	for (int memory_index = 0; memory_index < MEMORY_LENGTH; memory_index++)
 	{
-		temp_variables[p] = malloc(sizeof(memory_line));
-		temp_variables[p]->name = malloc(TEMP_STR_LENGTH);
-		temp_variables[p]->name = "";
+		// If this slot in the memory_cache is valid, copy the name into the temp memory
+		if (memory_cache[memory_index] != NULL)
+		{
+			temp_variables[memory_index] = malloc(sizeof(memory_line));
+			temp_variables[memory_index]->name = malloc(TEMP_STR_LENGTH);
+			strcpy(temp_variables[memory_index]->name, memory_cache[memory_index]->name);
+			continue;
+		} 
+
+		// If this slot in the memory_cache is invalid, set this as an empty slot in temp memory
+		temp_variables[memory_index] = malloc(sizeof(memory_line));
+		temp_variables[memory_index]->name = malloc(TEMP_STR_LENGTH);
+		temp_variables[memory_index]->name = "";
 	}
 
 	// Iterates over every line
@@ -394,6 +415,7 @@ void extract_functions(string_array* file_lines)
 				break;
 			}
 
+			// VARIABLES
 			// Track variable assignments, do not store them globally yet
 			if (strcmp(keywords.array[j], "<-") == 0)
 			{
@@ -404,9 +426,9 @@ void extract_functions(string_array* file_lines)
 					break;
 				}
 				
-				// Check if the variable has already been assigned.
-				const int mem_index = ml_check_variable(keywords.array[j - 1], temp_variables);
-				if (mem_index != -1) { break; }
+				// Check if the variable name has already been assigned to a variable or function.
+				if (ml_check_variable(keywords.array[j - 1], temp_variables) != -1) { break; }
+				if (ml_check_function(keywords.array[j - 1]) != -1) { print_error("ERROR: Variables cannot have the same name as a defined function!\n", false); break; }
 
 				// Assign the result of the expression to a variable
 				ml_assign_variable(keywords.array[j - 1], 0, temp_variables);
@@ -425,11 +447,9 @@ void extract_functions(string_array* file_lines)
 					if (i + 1 == file_lines->length) { print_error("Function declared without contents!\n", false); }
 				}
 
-				if(ml_check_function(keywords.array[j + 1]) != -1)
-				{
-					print_error("ERROR: Defining function with a duplicate name!\n", false);
-					goto early_continue;
-				}
+				// Check if the function has already been defined as a function or variable
+				if(ml_check_function(keywords.array[j + 1]) != -1) {print_error("ERROR: Defining function with a duplicate name!\n", false); break;	}
+				if (ml_check_variable(keywords.array[j + 1], temp_variables) != -1) {print_error("ERROR: Functions cannot have the same name as a defined variable!\n", false); break; }
 
 				// allocation memory for function
 				function* ml_function = malloc(sizeof(function));
@@ -454,11 +474,19 @@ void extract_functions(string_array* file_lines)
 				for (int k = 2; k < keywords.length; k++)
 				{
 					// If param name has already been defined in global variables, error
-					/*if (ml_check_variable(keywords.array[k], temp_variables) != -1)
+					if (ml_check_variable(keywords.array[k], temp_variables) != -1)
 					{
+						// This SHOULD exit immediately, because if this is not handled it will cause a seg fault.
 						print_error("ERROR: Function parameters cannot have the same name as defined variables.\n", true);
 						goto early_continue;
-					}*/
+					}
+
+					if (ml_check_variable(keywords.array[k], ml_function->local_memory) != -1)
+					{
+						// This SHOULD exit immediately, because if this is not handled it will cause a seg fault.
+						print_error("ERROR: Function parameters cannot have duplicate parameters.\n", false);
+						goto early_continue;
+					}
 					ml_assign_variable(keywords.array[k], 0.0, ml_function->local_memory);
 					ml_function->param_count = ml_function->param_count + 1;
 				}
@@ -522,7 +550,7 @@ void extract_functions(string_array* file_lines)
 					break;
 				}
 				// Remove the function's lines from file_lines
-				remove_strings_from_array(file_lines, i, i + lines_to_remove_count, -1);
+				remove_strings_from_array(file_lines, i, i + lines_to_remove_count, false);
 
 				// Adds the function to function_cache
 				ml_add_function(ml_function);
@@ -606,6 +634,12 @@ double process_lines(string_array file_lines, memory_line* memory[MEMORY_LENGTH]
 			// PRINTING
 			if (strcmp(keywords.array[i], "print") == 0)
 			{
+				if (i != 0)
+				{
+					print_error("ERROR: Print statement must be located at index 0 on a line.\n", false);
+					goto early_continue;
+				}
+
 				if (keywords.length + 1 > 63 || i == keywords.length)
 				{
 					print_error("ERROR: Invalid print parameters!\n", false);
@@ -630,6 +664,11 @@ double process_lines(string_array file_lines, memory_line* memory[MEMORY_LENGTH]
 			// RETURN
 			if (strcmp(keywords.array[i], "return") == 0)
 			{
+				if (i != 0)
+				{
+					print_error("ERROR: Return statements must be located at index 0 on a line!\n", false);
+				}
+
 				// If returning nothing, then just end it here
 				if (i + 1 == keywords.length) { return 0.0; }
 
@@ -698,12 +737,21 @@ void ml_assign_variable(char* name, const double value, memory_line* memory[MEMO
 	memory[slot_index]->value = value;
 }
 
-// Checks if a variable of a specified name exists in the memory_cache.
-// If the variable exists, this function returns its slot_index in memory. -1 if not.
+/*
+ ML Check Variable
+ 
+ Checks if a variable of a specified name exists in the input memory cache.
+ If the variable exists, this function returns its slot_index in memory. -1 if not.
+
+ @name = The name of the variable being searched for in the input memory cache.
+ @memory = The memory cache being searched.
+*/
 int ml_check_variable(const char* name, memory_line* memory[MEMORY_LENGTH])
 {
+	// Loop over every variable in the input memory cache
 	for (int i = 0; i < MEMORY_LENGTH; i++)
 	{
+		// If the current slot is empty, allocate memory to it
 		if (memory[i] == NULL)
 		{
 			memory[i] = malloc(sizeof(memory_line)+1);
@@ -714,21 +762,31 @@ int ml_check_variable(const char* name, memory_line* memory[MEMORY_LENGTH])
 			memory[i]->name = "";
 		}
 
+		// If the current slot's name matches the search name, return its slot index
 		if (strcmp(memory[i]->name, name) == 0)
 		{
 			return i;
 		}
 	}
+
+	// Return -1 to show the variable wasn't found
 	return -1;
 }
 
-// Checks if a function of a specified name exists in the functions_cache.
-// If the function exists, this function returns its slot_index in memory. -1 if not.
+/*
+ Ml Check Function
+
+ Checks if a function of a specified name exists in the functions_cache.
+ If the function exists, this function returns its slot_index in memory. -1 if not.
+
+ @name = The name of the function being searched for.
+*/
 int ml_check_function(const char* name)
 {
-
+	// Loop over every function in functions_cache
 	for (int i = 0; i < MEMORY_LENGTH; i++)
 	{
+		// If the current slot is empty, allocate memory to it
 		if (functions_cache[i] == NULL) {
 			functions_cache[i] = malloc(sizeof(function));
 			if (functions_cache[i] == NULL) {
@@ -737,24 +795,27 @@ int ml_check_function(const char* name)
 			functions_cache[i]->name = "";
 		}
 
+		// If the current slot's name matches the search name, return its slot index
 		if (strcmp(functions_cache[i]->name, name) == 0)
 		{
 			return i;
 		}
 	}
+
+	// Return -1 to show the function wasn't found
 	return -1;
 
 }
 
 /*
  ML Add Function
+ 
  This function will add a new ML function into the functions cache memory array.
 
  @function_info = The new function which is being added to the cache.
 */
 void ml_add_function(function* function_info)
 {
-
 	// Find the first empty slot in memory
 	const int slot_index = ml_check_function("");
 
@@ -766,10 +827,8 @@ void ml_add_function(function* function_info)
 
 	// Assign all info to the slot in memory
 	functions_cache[slot_index]->lines = function_info->lines;
-
 	functions_cache[slot_index]->name = malloc(sizeof(function_info->name) + 1);
 	strcpy(functions_cache[slot_index]->name, function_info->name);
-
 	functions_cache[slot_index]->param_count = function_info->param_count;
 
 	// Assign all global memory to local memory
@@ -780,9 +839,15 @@ void ml_add_function(function* function_info)
 	}
 }
 
-// This function retrieves a ml_function that was previously assigned by ML code.
-// When ML code has a keyword that isn't recognized, we assume it's a variable or a function that needs to be retrieved.
-// "ml_check_function" MUST be run first.
+/*
+ ML Retrieve Function
+
+ This function will retrieve a defined function from the functions cache.
+ If the function doesn't exist, it will throw an error. To avoid an error, always
+ use "check_function()" first.
+
+ @name = The name of the function being retrieved.
+*/
 function* ml_retrieve_function(const char* name)
 {
 	// Find the slot index of the function parameter
@@ -797,9 +862,16 @@ function* ml_retrieve_function(const char* name)
 	return functions_cache[slot_index];
 }
 
-// This function retrieves a variable that was previously assigned by ML code.
-// When ML code has a keyword that isn't recognized, we assume it's a variable or a function that needs to be retrieved.
-// "ml_check_variable" MUST be run first.
+/*
+ ML Retrieve Variable
+
+ This function will retrieve a defined variable from the input memory cache.
+ If the variable doesn't exist, it will throw an error. To avoid an error, always
+ use "check_variable()" first.
+
+ @name = The name of the variable being retrieved.
+ @memory = The memory cache from which the variable is being retrieved.
+*/
 double ml_retrieve_variable(const char* name, memory_line* memory[MEMORY_LENGTH])
 {
 	// Find the slot in memory with the input name.
@@ -817,6 +889,12 @@ double ml_retrieve_variable(const char* name, memory_line* memory[MEMORY_LENGTH]
 
  This function will recursively calculate the result of an expression.
  Variables will be retrieved, functions returned and math expressions calculated.
+
+ @keywords = This is the array of keywords found in the current line. This includes ALL keywords, not just the expression.
+ @expr_start_pos = This is the starting index of the expression in the keywords array.
+ @expr_end_pos = This is the ending index of the expression in the keywords array.
+ @stream = The character stream where the expression result will be stored.
+ @memory = The memory cache from which variables will be retrieved.
 */
 void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos, char* stream, memory_line* memory[MEMORY_LENGTH])
 {
@@ -826,20 +904,27 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 	for (int i = expr_start_pos; i < expr_end_pos; i++)
 	{
 		// Replace every variable with its value
-		
 
+		// Check if it is a function
+		int starting_length = keywords.length;
 		if (parse_function_syntax(&keywords, i) != -1)
 		{
+			int difference = starting_length - keywords.length;
+			expr_end_pos = expr_end_pos - difference;
 			continue;
 		}
 
+		// Check if it is a number
 		if(is_real_num(keywords.array[i]) != -1)
 		{
+			// Do nothing with it
 			continue;
 		}
 
+		// Check if it is a variable
 		if (ml_check_variable(keywords.array[i], memory) != -1)
 		{
+			// Replace its var call with its value
 			char* retrieved_var_s = "";
 			const double retrieved_var_d = ml_retrieve_variable(keywords.array[i], memory);
 			retrieved_var_s = malloc(sizeof(retrieved_var_d) + 1);
@@ -850,6 +935,7 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 			continue;
 		}
 
+		// Check if it is an operator
 		if (strlen(keywords.array[i]) == 1)
 		{
 			char* char_ptr = strchr("+-*/", keywords.array[i][0]);
@@ -859,8 +945,8 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 			}
 		}
 
+		// If it is none of those, assume it is an undefined variable and set it to 0
 		keywords.array[i] = "0";
-
 	}
 
 	// Outer loop to handle two passes (multiplication/division, then addition/subtraction)
@@ -924,10 +1010,12 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 		}
 	}
 
+	if (expr_end_pos - expr_start_pos > 1)
+	{
+		print_error("ERROR: Could not resolve expression.\n", false);
+	}
 
-	// These functions will only execute once the expression is 1 string long (either a variable or number)
-
-	// This checks if the keyword is a number
+	// This will only execute once the expression is 1 string long (always a number by now)
 	if (isdigit(keywords.array[expr_start_pos][0]))
 	{
 		double number = 0;
@@ -940,16 +1028,6 @@ void calc_expression(string_array keywords, int expr_start_pos, int expr_end_pos
 		return;
 	}
 
-	// This will then check if it is a variable
-	if (ml_check_variable(keywords.array[expr_start_pos], memory) != -1)
-	{
-		char* retrieved_var_s = "";
-		const double retrieved_var_d = ml_retrieve_variable(keywords.array[expr_start_pos], memory);
-		retrieved_var_s = malloc(sizeof(retrieved_var_d) + 1);
-		dtos(retrieved_var_d, retrieved_var_s);
-		strcpy(stream, retrieved_var_s);
-		return;
-	}
 	return;
 }
 
@@ -1028,16 +1106,6 @@ void remove_character(char to_remove, char* stream)
 	stream[next_char_pos] = '\0';
 }
 
-// This is just for debugging. An easy-to-call function that prints an array of strings.
-void print_strings(string_array* strings)
-{
-	for (int i = 0; i < strings->length; i++)
-	{
-		fprintf(stdout,"Print Each %i: %s\n", i, strings->array[i]);
-	}
-	
-}
-
 /*
  Remove Strings from Array
  
@@ -1046,14 +1114,15 @@ void print_strings(string_array* strings)
  @str_array = string_array from which strings are removed.
  @start_pos = The first index at which strings should be removed. This index is also removed.
  @end_pos = The last index at which strings should be removed. This index is NOT removed.
+ @reverse = If true, the function will remove all strings OUTSIDE the boundary.
 */
-void remove_strings_from_array(string_array* str_array, int start_pos, int end_pos, int reverse)
+void remove_strings_from_array(string_array* str_array, int start_pos, int end_pos, bool reverse)
 {
 	int next_string_pos = 0;
 	for (int index = 0; index < str_array->length; index++)
 	{
 		// If not reversed, remove strings WITHIN bounds
-		if (reverse == -1)
+		if (reverse == false)
 		{
 			if (index < start_pos || index >= end_pos)
 			{
@@ -1075,10 +1144,15 @@ void remove_strings_from_array(string_array* str_array, int start_pos, int end_p
 }
 
 /*
-This will parse the syntax of a function call
+ Parse Function Syntax
 
-@keywords = the keywords passed in.
-@start_pos = the position in the keywords where the function call begins.
+ This will parse the syntax of a function call.
+ This will also execute the function call and find any returned values. The returned values are
+ not actually returned by this function, but are instead placed into the original string_array
+ replacing the function call.
+
+ @keywords = the keywords passed in.
+ @start_pos = the position in the keywords where the function call begins.
 */
 int parse_function_syntax(string_array* keywords, int start_pos)
 {
@@ -1095,6 +1169,7 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 	if (!isalpha(function_keywords.array[start_pos][0])) { return -1; }
 
 	int end_pos = -1;
+	bool found_open_bracket = false;
 
 	// Loop over each keyword (to find the end pos of the function call)
 	for (int keyword_index = start_pos; keyword_index < keywords->length; keyword_index++)
@@ -1103,6 +1178,14 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 		const int keyword_length = (int)strlen(keywords->array[keyword_index]);
 		for (int char_index = 0; char_index < keyword_length; char_index++)
 		{
+			// If it finds an open bracket > 1 keyword away, this means the starting keyword is NOT a function
+			if (!found_open_bracket && keywords->array[keyword_index][char_index] == '(')
+			{
+				if (keyword_index > start_pos + 1)
+				{
+					return -1;
+				}
+			}
 			// Find the first closing bracket, and set the end position as the next keyword.
 			if (keywords->array[keyword_index][char_index] == ')')
 			{
@@ -1119,15 +1202,13 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 	// Checks if there is no closing bracket to the function call.
 	if (end_pos == -1)
 	{
-		// THERE IS NO CLOSING BRACKET
-		// I am unsure if this should be an error, because it might not be a function call...
-		// anyway return failure here
+		// This may not be a function call, so do not throw an error here.
+		// Return failure anyway
 		return -1;
 	}
 
 	// remove all other keywords from function_keywords outside the function call keywords
-	//remove_other_strings_from_array(&function_keywords, start_pos, end_pos);
-	remove_strings_from_array(&function_keywords, start_pos, end_pos, 0);
+	remove_strings_from_array(&function_keywords, start_pos, end_pos, true);
 
 
 	// This is to know how many strings we need to replace with the return statement later.
@@ -1240,10 +1321,6 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 		// check if found_function returns a value.
 		if (found_function->does_return != -1)
 		{
-			// This calculates how many keywords in the original line we need to replace with the returned result
-			// We need to do a -1 at the end to account for the string we wish to keep (the result).
-			int replace_count = parsed_keywords.length - spaces_added - 1;
-
 			// Turn returned_result into a string from a double
 			char buffer[TEMP_STR_LENGTH];
 			dtos(returned_result, buffer);
@@ -1253,8 +1330,11 @@ int parse_function_syntax(string_array* keywords, int start_pos)
 			keywords->array[start_pos] = malloc(sizeof(buffer));
 			strcpy(keywords->array[start_pos], buffer);
 
+			// Calculate how many keywords to replace in the original line
+			const int keywords_to_delete = spaces_added - (spaces_added - end_pos);
+
 			// remove the rest of the function call
-			remove_strings_from_array(keywords, start_pos + 1, replace_count + start_pos, -1);
+			remove_strings_from_array(keywords, start_pos + 1, keywords_to_delete, false);
 		}
 
 		// Return a non-negative number to indicate it found and handled a function.
@@ -1285,7 +1365,14 @@ int print_error(char* string, bool should_exit)
 }
 
 /*
- 
+ Print Lines
+
+ This will take an array of strings and print them to the screen.
+ The strings are stored within lines_to_print, and strings are added to the array
+ when an ML print function occurs.
+
+ If an error has occurred at any point in the execution of the ML program, then
+ the outputs will not be printed.
 */
 int print_lines()
 {
@@ -1295,10 +1382,10 @@ int print_lines()
 		exit(EXIT_FAILURE);
 	}
 
-	if(lines_to_print->length <= 0)
-	{
-		return 0;
-	}
+	// If there are no lines to print, exit early.
+	if(lines_to_print->length <= 0) { return 0; }
+
+	// Loop over all lines and print them to stdout
 	for (int i = 0; i < lines_to_print->length; i++)
 	{
 		(void)fprintf(stdout, "%s\n", lines_to_print->array[i]);
